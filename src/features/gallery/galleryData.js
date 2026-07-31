@@ -55,6 +55,7 @@ const galleryCatalog = [
     content: '/thumbnails/evening_window.mp4',
     title: 'Evening Window, July 2026',
     size: { width: 280, height: 200 },
+    objectPosition: 'center 40%',
     link: '/feelings/window-01',
   }),
 

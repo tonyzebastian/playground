@@ -28,7 +28,17 @@ function GalleryContent({ contentType, content, component, componentProps, title
   }
 
   if (contentType === 'video') {
-    return <video src={content} className="h-full w-full object-cover" autoPlay muted loop playsInline />;
+    return (
+      <video
+        src={content}
+        className="h-full w-full object-cover"
+        style={objectPosition ? { objectPosition } : undefined}
+        autoPlay
+        muted
+        loop
+        playsInline
+      />
+    );
   }
 
   if (contentType === 'component') {

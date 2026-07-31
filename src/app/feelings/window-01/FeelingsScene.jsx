@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DialRoot, DialStore, useDialKit } from "dialkit";
 import AppHeader from "@/components/shared/AppHeader";
 import WebGLBackground from "./WebGLBackground";
@@ -9,6 +9,7 @@ import styles from "./FeelingsScene.module.css";
 
 export default function FeelingsScene() {
   const [showControls, setShowControls] = useState(false);
+  const windAudioRef = useRef(null);
   const controls = useDialKit(
     "Window 01 — art direction",
     {
@@ -80,6 +81,11 @@ export default function FeelingsScene() {
         branchSway: [2, 0, 2, .01],
         lightDrift: [.98, 0, 2, .01],
       },
+      sound: {
+        _collapsed: true,
+        muted: false,
+        volume: [.18, 0, 1, .01],
+      },
     },
     // Adds the reflected-light layer while retaining the approved branch rig.
     { id: "window-01-art-direction-v10", persist: true }
@@ -97,6 +103,34 @@ export default function FeelingsScene() {
     DialStore.unregisterPanel("window-01-art-direction-v7");
     DialStore.unregisterPanel("window-01-art-direction-v8");
     DialStore.unregisterPanel("window-01-art-direction-v9");
+  }, []);
+
+  useEffect(() => {
+    const windAudio = windAudioRef.current;
+    if (!windAudio) return;
+
+    windAudio.muted = controls.sound.muted;
+    windAudio.volume = controls.sound.volume;
+  }, [controls.sound.muted, controls.sound.volume]);
+
+  useEffect(() => {
+    const beginWind = () => {
+      const windAudio = windAudioRef.current;
+      if (!windAudio) return;
+
+      windAudio.play().catch(() => {
+        // A browser may still reject playback; a later interaction retries it.
+      });
+    };
+
+    window.addEventListener("pointerdown", beginWind, { once: true });
+    window.addEventListener("keydown", beginWind, { once: true });
+
+    return () => {
+      window.removeEventListener("pointerdown", beginWind);
+      window.removeEventListener("keydown", beginWind);
+      windAudioRef.current?.pause();
+    };
   }, []);
 
   useEffect(() => {
@@ -122,6 +156,12 @@ export default function FeelingsScene() {
 
   return (
     <main className={styles.page}>
+      <audio
+        ref={windAudioRef}
+        src="/feelings/window%2001/wind.mp3"
+        loop
+        preload="metadata"
+      />
       <div className={styles.header}>
         <AppHeader title="Evening Window" />
       </div>
