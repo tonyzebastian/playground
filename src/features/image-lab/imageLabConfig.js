@@ -79,6 +79,26 @@ export const IMAGE_LAB_CONFIG = {
     showOriginal: false,
     backgroundColor: '#ffffff',
   },
+  brush: {
+    enabled: false,
+    style: {
+      type: 'select',
+      options: [
+        { value: 'painterly', label: 'Painterly pastel' },
+        { value: 'watercolor', label: 'Transparent wash' },
+        { value: 'graphite', label: 'Graphite study' },
+        { value: 'ink', label: 'Illustrated ink' },
+      ],
+      default: 'painterly',
+    },
+    seed: [42, 1, 999],
+    detail: [58, 10, 100],
+    strokeSize: [9, 3, 24, 0.5],
+    edgeFollow: [82, 0, 100],
+    colorFidelity: [88, 0, 100],
+    originalBlend: [6, 0, 100],
+    paperColor: '#f2ede3',
+  },
   mosaic: {
     enabled: true,
     tileSize: [6, 3, 64],
