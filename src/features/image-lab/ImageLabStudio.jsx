@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DialRoot, useDialKitController } from 'dialkit';
+import BrushPainterCanvas from './BrushPainterCanvas';
 import ImageLabCanvas from './ImageLabCanvas';
 import {
   IMAGE_LAB_ASPECTS,
@@ -62,8 +63,8 @@ export default function ImageLabStudio() {
     if (path === 'image.removePhoto') removePhoto();
   }, [removePhoto]);
 
-  const handleDownload = useCallback(() => {
-    const downloaded = canvasApiRef.current?.download();
+  const handleDownload = useCallback(async () => {
+    const downloaded = await canvasApiRef.current?.download();
     showNotice(downloaded ? 'PNG download started' : 'Preview is still loading');
   }, [showNotice]);
 
@@ -149,13 +150,23 @@ export default function ImageLabStudio() {
               width: `min(100cqw, calc(100cqh * ${IMAGE_LAB_ASPECTS[values.output.aspect]}))`,
             }}
           >
-            <ImageLabCanvas
-              ref={canvasApiRef}
-              imageUrl={imageUrl}
-              values={values}
-              aspectRatio={IMAGE_LAB_ASPECTS[values.output.aspect]}
-              onError={setRendererError}
-            />
+            {values.brush.enabled ? (
+              <BrushPainterCanvas
+                ref={canvasApiRef}
+                imageUrl={imageUrl}
+                values={values}
+                aspectRatio={IMAGE_LAB_ASPECTS[values.output.aspect]}
+                onError={setRendererError}
+              />
+            ) : (
+              <ImageLabCanvas
+                ref={canvasApiRef}
+                imageUrl={imageUrl}
+                values={values}
+                aspectRatio={IMAGE_LAB_ASPECTS[values.output.aspect]}
+                onError={setRendererError}
+              />
+            )}
             {rendererError && (
               <div className="absolute inset-0 grid place-items-center bg-slate-950 p-8 text-center text-sm text-white">
                 {rendererError}
@@ -182,7 +193,7 @@ export default function ImageLabStudio() {
             </button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-            <DialRoot mode="inline" theme="light" />
+            <DialRoot mode="inline" theme="light" productionEnabled />
           </div>
         </aside>
       </div>
