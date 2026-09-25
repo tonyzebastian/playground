@@ -4,6 +4,8 @@
 **Source snapshot:** 2026-07-27  
 **Original title:** `Hoshi-no-Tani — The Valley of Stars`
 
+The source Pen is public on CodePen and is distributed under its [MIT license](/vault/shaders/hoshi-no-tani/LICENSE.md). The copy here retains the original author credit and license notice.
+
 The complete, unmodified source snapshot is available as a static three-file CodePen project:
 
 - [index.html](/vault/shaders/hoshi-no-tani/index.html)
