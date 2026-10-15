@@ -26,3 +26,5 @@
 @media(max-width:370px){.kalimba-recording-sheet{padding-left:18px;padding-right:18px}.kalimba-capture-slots{gap:12px}.kalimba-capture-wave{height:72px}}
 @media(max-height:760px) and (max-width:999px){.kalimba-app[data-editing] .kalimba-device{max-width:min(100%,calc((100svh - 145px)*.7027))}}
 @media(prefers-reduced-motion:reduce){.kalimba-capture-wave>span,.kalimba-wave-pulse,.kalimba-capture-slots li[data-captured]>span{animation:none!important}.kalimba-capture-wave[data-listening]>span{transform:scaleY(var(--wave-level))}.kalimba-wave-pulse{display:none}}
+
+.kalimba-song-trigger>span>small{display:block;font-size:10px;line-height:1.6;font-weight:400;color:var(--k-muted);margin-top:3px}

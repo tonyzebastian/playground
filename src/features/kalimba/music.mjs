@@ -28,6 +28,43 @@ export function mapSong(song, keys) {
   return null;
 }
 
+// An explicitly labelled practice arrangement for non-standard nine-key tunings.
+// Map distinct melody pitches to distinct, ascending recorded pitches so repeats
+// and melodic direction survive; choose the smallest overall interval changes.
+export function adaptSong(song,keys){
+  const available=[...new Map(keys.filter(key=>Number.isFinite(key.midi)).sort((a,b)=>a.midi-b.midi||a.id-b.id).map(key=>[key.midi,key])).values()];
+  const intervals=[...new Set(song.notes)].sort((a,b)=>a-b);
+  if(keys.length!==9||new Set(keys.map(key=>key.id)).size!==9||available.length<intervals.length)return null;
+  let best=null;
+  for(let start=0;start<=available.length-intervals.length;start++){
+    const root=available[start].midi-intervals[0];
+    let states=new Map([[start,{cost:0,indexes:[start]}]]);
+    for(let tone=1;tone<intervals.length;tone++){
+      const next=new Map();
+      for(let index=start+tone;index<available.length-(intervals.length-tone-1);index++){
+        const error=available[index].midi-(root+intervals[tone]);
+        for(const [previous,state] of states){
+          if(previous>=index)continue;
+          const gapError=(available[index].midi-available[previous].midi)-(intervals[tone]-intervals[tone-1]);
+          const cost=state.cost+error*error+gapError*gapError*.5;
+          if(!next.has(index)||cost<next.get(index).cost)next.set(index,{cost,indexes:[...state.indexes,index]});
+        }
+      }
+      states=next;
+    }
+    for(const state of states.values())if(!best||state.cost<best.cost)best={...state,root};
+  }
+  if(!best)return null;
+  const pitches=new Map(intervals.map((interval,index)=>[interval,available[best.indexes[index]]]));
+  return {root:best.root,adapted:true,sequence:song.notes.map((interval,index)=>{
+    const key=pitches.get(interval);return {key:key.id,midi:key.midi,beats:song.beats[index]??1};
+  })};
+}
+export function playableSong(song,keys){
+  const exact=mapSong(song,keys);
+  return exact?{...exact,adapted:false}:adaptSong(song,keys);
+}
+
 export function nearestKey(frequency,keys,tolerance=65) {
   const candidates=keys.filter(k=>k.frequency>0).map(k=>({key:k,cents:Math.abs(centsBetween(frequency,k.frequency))})).sort((a,b)=>a.cents-b.cents);
   // Identical pitches cannot identify a physical tine reliably.
