@@ -26,12 +26,6 @@ const componentCard = (id, component, options) => createGalleryCard(id, {
 });
 
 const galleryCatalog = [
-  imageCard('kalimba', {
-    content: '/thumbnails/kalimba.png',
-    title: 'Kalimba · A Little Practice',
-    size: { width: 240, height: 342 },
-    link: '/kalimba',
-  }),
   imageCard('fish', {
     content: '/thumbnails/fish.gif',
     title: 'A School of Fish',
