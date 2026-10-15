@@ -23,3 +23,9 @@ test('setup loads a playable basic song and remembers free play',()=>{
   assert.equal(initialSong([{id:0,midi:60}]),null);
   assert.ok(SONGS.includes(initialSong(keys,'unknown')));
 });
+test('a complete non-standard tuning opens a starter song instead of leaving every song locked',()=>{
+ const keys=[60,62,63,66,68,70,73,75,78].map((midi,id)=>({id,midi}));
+ assert.equal(initialSong(keys)?.id,'twinkle');
+ assert.equal(initialSong(keys,'love')?.id,'love');
+ assert.equal(initialSong(keys,'free'),null);
+});

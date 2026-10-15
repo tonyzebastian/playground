@@ -7,7 +7,7 @@ import KalimbaInstrument from './KalimbaInstrument';
 import RecordingPanel from './RecordingPanel';
 import { KalimbaAudio } from './audio';
 import { loadKeys,saveKey,exportKeys,importKeys } from './storage';
-import { SONGS,noteName,nearestKey,mapSong } from './music.mjs';
+import { SONGS,noteName,nearestKey,playableSong } from './music.mjs';
 import { initialSong, nextSetupKey } from './flow.mjs';
 import { analyseCalibration, assertUniqueKey, toneProfile, calibrationMatch } from './calibration.mjs';
 
@@ -35,7 +35,7 @@ export default function KalimbaApp({art}){
   const complete=keys.length===9;
   const displayKeys=keys;
   const song=SONGS.find(s=>s.id===songId);
-  const mapped=useMemo(()=>song?mapSong(song,displayKeys):null,[song,displayKeys]);
+  const mapped=useMemo(()=>song?playableSong(song,displayKeys):null,[song,displayKeys]);
   const sequence=mapped?.sequence||EMPTY_SEQUENCE;
   const animate=useCallback(id=>setActive({id,serial:performance.now()}),[]);
 
@@ -64,11 +64,11 @@ export default function KalimbaApp({art}){
   },[loaded,complete,songId,tempo,mode,loop]);
   function chooseSong(next){
     stop();setSongId(next?.id??null);setTempo(next?.bpm??76);setStep(0);setHits(0);
-    timedHit.current=null;setFinished(false);finishedRef.current=false;setSheet(null);setMessage('');
+    timedHit.current=null;setFinished(false);finishedRef.current=false;setSheet(null);setMessage(next&&playableSong(next,keys)?.adapted?'Adapted to your keys. Follow the highlighted tines.':'');
   }
   function openSheet(next){stop();setSheet(next);setError('');}
   function editKeys(all=false){stop();setSheet(null);setEditing(all?'setup':'edit');setRecordAll(all);setSelected(null);setCandidate(null);setMessage('');setError('');}
-  function finishEditing(){stop();setEditing(null);setCandidate(null);setMessage('');setError('');if(song&&!mapSong(song,keys))chooseSong(initialSong(keys));}
+  function finishEditing(){stop();setEditing(null);setCandidate(null);setMessage('');setError('');if(song&&!playableSong(song,keys))chooseSong(initialSong(keys));}
   const advance=useCallback(()=>{
     setStep(current=>{
       timedHit.current=null;
@@ -238,7 +238,7 @@ export default function KalimbaApp({art}){
     </header>
 
     <div className="kalimba-song-selection">
-      {!loaded?<span className="kalimba-top-hint">Opening your instrument…</span>:editing?<span className="kalimba-top-hint">{editing==='setup'?`Tap a key to record · ${keys.length}/9 saved`:'Tap a key to change its sound.'}</span>:<button className="kalimba-song-trigger" onClick={()=>openSheet('songs')} aria-label="Choose song or free play"><span>{song?.title??'Free play'}</span><ChevronDown size={15}/></button>}
+      {!loaded?<span className="kalimba-top-hint">Opening your instrument…</span>:editing?<span className="kalimba-top-hint">{editing==='setup'?`Tap a key to record · ${keys.length}/9 saved`:'Tap a key to change its sound.'}</span>:<button className="kalimba-song-trigger" onClick={()=>openSheet('songs')} aria-label="Choose song or free play"><span>{song?.title??'Free play'}{mapped?.adapted&&<small>Adapted to your keys</small>}</span><ChevronDown size={15}/></button>}
     </div>
 
     <div className="kalimba-workspace">
@@ -281,7 +281,7 @@ export default function KalimbaApp({art}){
             onReplay={()=>engine().play(currentKey).catch(err=>setError(err.message))} onCancel={stop}
           />:sheet==='songs'?<div className="kalimba-song-list">
             <button onClick={()=>chooseSong(null)} aria-pressed={!song}><span><strong>Free play</strong><small>No song. Just your instrument.</small></span>{!song&&<Check size={16}/>}</button>
-            {SONGS.map(item=>{const fits=!!mapSong(item,keys);return <button key={item.id} disabled={!fits} aria-pressed={songId===item.id} onClick={()=>chooseSong(item)}><span><strong>{item.title}</strong><small>{fits?item.detail:'Needs different notes'}</small></span>{songId===item.id&&<Check size={16}/>}</button>;})}
+            {SONGS.map(item=>{const arrangement=playableSong(item,keys);return <button key={item.id} disabled={!arrangement} aria-pressed={songId===item.id} onClick={()=>chooseSong(item)}><span><strong>{item.title}</strong><small>{arrangement?.adapted?'Adapted to your recorded keys':arrangement?item.detail:'Finish recording your keys'}</small></span>{songId===item.id&&<Check size={16}/>}</button>;})}
           </div>:<div className="kalimba-settings-content">
             <button className="kalimba-settings-edit" disabled={!loaded} onClick={()=>editKeys(false)}><span><Pencil size={16}/> Edit keys</span><span>{keys.length}/9 recorded</span></button>
             {complete&&<div className="kalimba-settings-group">
