@@ -27,13 +27,13 @@ test('octaves are different notes, not duplicate recordings',()=>{
 });
 test('calibration needs repeated independent plucks, not just a long ringing note',()=>{
  const frames=Array(12).fill(261.63);
- assert.throws(()=>analyseCalibration(frames,[261.63]),/two clear plucks/);
+ assert.throws(()=>analyseCalibration(frames,[261.63]),/three clear plucks/);
  assert.equal(analyseCalibration(frames,[261.63,261.8,261.5]).midi,60);
- assert.throws(()=>analyseCalibration(frames,[261.63,293.66,261.63]),/different notes/);
+ assert.throws(()=>analyseCalibration(frames,[261.63,293.66,261.63]),/No consistent set/);
 });
-test('calibration rejects unstable measurements even when they round to one note',()=>{
+test('calibration tolerates drifting tails when independent plucks agree',()=>{
  const frames=[...Array(6).fill(256),...Array(6).fill(267)];
- assert.throws(()=>analyseCalibration(frames,[261,261]),/unstable/);
+ assert.equal(analyseCalibration(frames,[261,261.5,262]).midi,60);
 });
 test('pitch needs two consistent frames before being trusted',()=>{
  const latch=new PitchLatch();

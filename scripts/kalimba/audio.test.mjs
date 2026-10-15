@@ -83,3 +83,20 @@ test('cancelling while worklet loads never connects a stale microphone',async()=
     audio.stopListening();pending.resolve();assert.equal(await listening,false);assert.equal(stopped,1);
   }finally{audio.dispose();restore();}
 });
+
+test('sample extraction starts at a matching later pluck, skipping an earlier wrong note',async()=>{
+  const restore=environment();const audio=new KalimbaAudio();
+  try{
+    const context=await audio.unlock(),rate=24000;
+    context.decodeAudioData=async()=>({sampleRate:rate,getChannelData:()=>Float32Array.from({length:rate*3},(_,i)=>{
+      const time=i/rate;
+      return time<.8?.3*Math.sin(2*Math.PI*293.66*time):time>=1.5?.3*Math.sin(2*Math.PI*261.63*time):0;
+    })});
+    const sample=await audio.sample(new Blob(['test']),{startSeconds:1.38,duration:1.2});
+    const view=new DataView(await sample.arrayBuffer());
+    const samples=Float32Array.from({length:2048},(_,i)=>view.getInt16(44+(i+2400)*2,true)/32767);
+    const {detectPitch}=await import('../../src/features/kalimba/pitch.mjs');
+    assert.ok(Math.abs(detectPitch(samples,rate).frequency-261.63)<2);
+    assert.ok(sample.size<=44+rate*1.2*2);
+  }finally{audio.dispose();restore();}
+});
