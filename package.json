@@ -6,7 +6,9 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "predev": "node scripts/kalimba/build-audio.mjs",
+    "prebuild": "node scripts/kalimba/build-audio.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
