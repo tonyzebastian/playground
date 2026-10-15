@@ -4,8 +4,6 @@ export default function KalimbaInstrument({art,keys,active,target,upcoming,onKey
   return <div className="kalimba-drawing">
     <svg viewBox={`0 0 ${art.width} ${art.height}`} aria-label="Nine-key kalimba. Keys 1 to 9 from left to right.">
       <g dangerouslySetInnerHTML={{__html:art.base}}/>
-      {editing&&Number.isInteger(target)&&<path className="kalimba-key-leader" aria-hidden="true"
-        d={`M${art.keys[target].tip[0]+(target<4?-15:15)} ${art.keys[target].tip[1]}H${target<4?0:art.width}`}/>}
       {art.keys.map(key=>{
         const recorded=keys.find(k=>k.id===key.id);
         return <g key={key.id} role="button" tabIndex={disabled?-1:0} aria-disabled={disabled||undefined}

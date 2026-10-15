@@ -92,15 +92,17 @@ export class KalimbaAudio {
     if(this.worklet){this.worklet.port.onmessage=null;this.worklet.onprocessorerror=null;this.worklet.port.close();this.worklet.disconnect();this.worklet=null;}
     this.input?.disconnect();this.analyser?.disconnect();this.input=null;this.analyser=null;
   }
-  async sample(blob){
+  async sample(blob,{startSeconds=0,duration=1.5}={}){
     const context=await this.unlock();
     const decoded=await context.decodeAudioData(await blob.arrayBuffer());
     const data=decoded.getChannelData(0),rate=decoded.sampleRate;
-    // Locate the first strong attack, keeping 25 ms of pre-roll.
-    let peak=0;for(const x of data)peak=Math.max(peak,Math.abs(x));
-    let start=0;while(start<data.length&&Math.abs(data[start])<peak*.25)start++;
-    start=Math.max(0,start-Math.floor(rate*.025));
-    const end=Math.min(data.length,start+Math.floor(rate*1.5));
+    // Start at a matching pluck, rather than replaying a discarded first attempt.
+    const offset=Math.max(0,Math.min(data.length-1,Math.floor(startSeconds*rate)));
+    const limit=Math.min(data.length,offset+Math.floor(Math.max(.15,Math.min(1.5,duration))*rate));
+    let peak=0;for(let i=offset;i<limit;i++)peak=Math.max(peak,Math.abs(data[i]));
+    let start=offset;while(start<limit&&Math.abs(data[start])<peak*.25)start++;
+    start=Math.max(offset,start-Math.floor(rate*.025));
+    const end=Math.min(limit,start+Math.floor(rate*1.5));
     const length=end-start;
     if(!length)throw new Error('The recording was empty. Please try again.');
     const wav=new ArrayBuffer(44+length*2),view=new DataView(wav);
