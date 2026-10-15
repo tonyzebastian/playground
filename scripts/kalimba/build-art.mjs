@@ -27,7 +27,6 @@ const base=`<defs>
 <g clip-path="url(#kalimba-opening)">
 <ellipse cx="260" cy="582" rx="33" ry="36" fill="#8b987b" opacity=".45"/>
 </g>
-<path d="M214 597Q260 636 306 597" fill="none" stroke="#f1f0e8" stroke-width="1.8"/>
 <rect x="48" y="183" width="424" height="9" rx="4.5" fill="#aeb3a5"/>
 <rect x="38" y="279" width="444" height="3" rx="1.5" fill="url(#kalimba-metal)" stroke="#a9afa0" stroke-width=".6"/>`;
 const keys=ends.map((end,id)=>{
