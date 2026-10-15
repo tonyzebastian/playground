@@ -1,0 +1,85 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+
+const source=(await readFile(new URL('../../src/features/kalimba/audio.js',import.meta.url),'utf8')).replace(/'\.\/(pitch|listening|analysis)\.mjs'/g,(_,name)=>JSON.stringify(new URL(`../../src/features/kalimba/${name}.mjs`,import.meta.url).href));
+const {KalimbaAudio}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};};
+
+function environment(getUserMedia){
+  const previous=['window','navigator','requestAnimationFrame','cancelAnimationFrame'].map(name=>[name,Object.getOwnPropertyDescriptor(globalThis,name)]);
+  class Context{
+    state='running';sampleRate=48000;destination={};started=0;
+    async resume(){} async close(){this.state='closed';}
+    createMediaStreamSource(){return {connect(){},disconnect(){}};}
+    createAnalyser(){this.analyser={frequencyBinCount:2048,disconnect(){},getFloatTimeDomainData(data){data.fill(0);},getFloatFrequencyData(data){data.fill(-Infinity);}};return this.analyser;}
+    createBufferSource(){return {connect(){},disconnect(){},start:()=>this.started++,stop(){}};}
+    async decodeAudioData(){return {sampleRate:24000,getChannelData:()=>Float32Array.from({length:48000},(_,i)=>i<12000?0:Math.sin(i*.1)*.4)};}
+  }
+  Object.defineProperty(globalThis,'window',{configurable:true,value:{AudioContext:Context,isSecureContext:true}});
+  Object.defineProperty(globalThis,'navigator',{configurable:true,value:{mediaDevices:{getUserMedia}}});
+  globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=()=>{};
+  return ()=>{for(const [name,descriptor]of previous){if(descriptor)Object.defineProperty(globalThis,name,descriptor);else delete globalThis[name];}};
+}
+test('microphone granted after cancellation is stopped immediately',async()=>{
+  const pending=deferred();let stopped=0;
+  const restore=environment(()=>pending.promise);const audio=new KalimbaAudio();
+  try{
+    const listening=audio.listen(()=>{});
+    await Promise.resolve();await Promise.resolve();audio.stopListening();
+    pending.resolve({getTracks:()=>[{stop:()=>stopped++}]});
+    assert.equal(await listening,false);assert.equal(stopped,1);assert.equal(audio.stream,null);
+  }finally{audio.dispose();restore();}
+});
+test('active microphone tracks are released on stop',async()=>{
+  let stopped=0;const track={stop:()=>stopped++};
+  const restore=environment(async()=>({getTracks:()=>[track],getAudioTracks:()=>[track]}));const audio=new KalimbaAudio();
+  try{assert.equal(await audio.listen(()=>{}),true);audio.stopListening();assert.equal(stopped,1);assert.equal(audio.stream,null);}
+  finally{audio.dispose();restore();}
+});
+test('declined permissions return an actionable error',async()=>{
+  const restore=environment(async()=>{throw Object.assign(new Error(),{name:'NotAllowedError'});});const audio=new KalimbaAudio();
+  try{await assert.rejects(audio.listen(()=>{}),/website settings/);assert.equal(audio.stream,null);}
+  finally{audio.dispose();restore();}
+});
+test('stopping playback cancels a sample that is still decoding',async()=>{
+  const restore=environment();const audio=new KalimbaAudio();
+  try{
+    const context=await audio.unlock(),pending=deferred();context.decodeAudioData=()=>pending.promise;
+    const playing=audio.play({blob:new Blob(['test'])});
+    await Promise.resolve();await Promise.resolve();audio.stopPlayback();pending.resolve({});await playing;
+    assert.equal(context.started,0);
+  }finally{audio.dispose();restore();}
+});
+test('sample extraction creates a bounded mono PCM WAV',async()=>{
+  const restore=environment();const audio=new KalimbaAudio();
+  try{
+    const sample=await audio.sample(new Blob(['test']));const bytes=await sample.arrayBuffer();
+    assert.equal(sample.type,'audio/wav');assert.equal(new TextDecoder().decode(bytes.slice(0,4)),'RIFF');
+    const header=new DataView(bytes);assert.equal(header.getUint16(22,true),1);assert.equal(header.getUint32(24,true),24000);
+    assert.ok(bytes.byteLength<=44+24000*1.5*2);
+  }finally{audio.dispose();restore();}
+});
+
+test('worklet messages are forwarded and disconnected on stop',async()=>{
+  const track={stop(){}};const restore=environment(async()=>({getTracks:()=>[track],getAudioTracks:()=>[track]}));
+  const audio=new KalimbaAudio(),frames=[];let closed=false,loaded=0;
+  try{
+    const context=await audio.unlock();context.audioWorklet={async addModule(){loaded++;}};
+    window.AudioWorkletNode=class {port={close(){closed=true;}};connect(){} disconnect(){}};
+    await audio.listen(frame=>frames.push(frame),null,[{id:4,frequency:261.63}]);
+    const node=audio.worklet;node.port.onmessage({data:{keyId:4,frequency:261.63,pluck:true}});
+    assert.equal(frames[0].keyId,4);audio.stopListening();assert.ok(closed);assert.equal(node.port.onmessage,null);
+    await audio.listen(()=>{});assert.equal(loaded,1);
+  }finally{audio.dispose();restore();}
+});
+test('cancelling while worklet loads never connects a stale microphone',async()=>{
+  let stopped=0;const track={stop(){stopped++;}};const restore=environment(async()=>({getTracks:()=>[track],getAudioTracks:()=>[track]}));
+  const audio=new KalimbaAudio(),pending=deferred();
+  try{
+    const context=await audio.unlock();context.audioWorklet={addModule:()=>pending.promise};
+    window.AudioWorkletNode=class {constructor(){throw new Error('Must not connect');}};
+    const listening=audio.listen(()=>{});await Promise.resolve();await Promise.resolve();await Promise.resolve();
+    audio.stopListening();pending.resolve();assert.equal(await listening,false);assert.equal(stopped,1);
+  }finally{audio.dispose();restore();}
+});
