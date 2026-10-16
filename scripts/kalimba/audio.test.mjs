@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
-const source=(await readFile(new URL('../../src/features/kalimba/audio.js',import.meta.url),'utf8')).replace(/'\.\/(pitch|listening|analysis)\.mjs'/g,(_,name)=>JSON.stringify(new URL(`../../src/features/kalimba/${name}.mjs`,import.meta.url).href));
+const source=(await readFile(new URL('../../src/features/kalimba/audio.js',import.meta.url),'utf8')).replace(/'\.\/(pitch|listening|analysis|signatures)\.mjs'/g,(_,name)=>JSON.stringify(new URL(`../../src/features/kalimba/${name}.mjs`,import.meta.url).href));
 const {KalimbaAudio}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};};
 
@@ -22,11 +22,11 @@ function environment(getUserMedia){
   return ()=>{for(const [name,descriptor]of previous){if(descriptor)Object.defineProperty(globalThis,name,descriptor);else delete globalThis[name];}};
 }
 test('microphone granted after cancellation is stopped immediately',async()=>{
-  const pending=deferred();let stopped=0;
-  const restore=environment(()=>pending.promise);const audio=new KalimbaAudio();
+  const pending=deferred(),requested=deferred();let stopped=0;
+  const restore=environment(()=>{requested.resolve();return pending.promise;});const audio=new KalimbaAudio();
   try{
     const listening=audio.listen(()=>{});
-    await Promise.resolve();await Promise.resolve();audio.stopListening();
+    await requested.promise;audio.stopListening();
     pending.resolve({getTracks:()=>[{stop:()=>stopped++}]});
     assert.equal(await listening,false);assert.equal(stopped,1);assert.equal(audio.stream,null);
   }finally{audio.dispose();restore();}
@@ -98,5 +98,37 @@ test('sample extraction starts at a matching later pluck, skipping an earlier wr
     const {detectPitch}=await import('../../src/features/kalimba/pitch.mjs');
     assert.ok(Math.abs(detectPitch(samples,rate).frequency-261.63)<2);
     assert.ok(sample.size<=44+rate*1.2*2);
+  }finally{audio.dispose();restore();}
+});
+
+test('old saved WAVs are learned once and cached without changing the recordings',async()=>{
+  const restore=environment();const audio=new KalimbaAudio();
+  try{
+    const context=await audio.unlock();let decodes=0;
+    context.decodeAudioData=async()=>{decodes++;return {sampleRate:48000,getChannelData:()=>Float32Array.from({length:48000},(_,i)=>.2*Math.exp(-i/14000)*Math.sin(2*Math.PI*261.63*i/48000))};};
+    const blob=new Blob(['original']),original={id:0,midi:60,frequency:261.63,blob};
+    const prepared=await audio.prepareKeys([original]);
+    assert.equal(prepared[0].profile.signature.rate,48000);assert.equal(prepared[0].profile.signature.bins.length,2048);
+    assert.equal(prepared[0].blob,blob);assert.equal(original.profile,undefined);
+    await audio.prepareKeys([{...original}]);assert.equal(decodes,1);
+  }finally{audio.dispose();restore();}
+});
+test('cancelled signature preparation never opens the microphone',async()=>{
+  let requested=0;const restore=environment(async()=>{requested++;throw new Error('Must not open');});const audio=new KalimbaAudio();
+  try{
+    const context=await audio.unlock(),pending=deferred(),started=deferred();
+    context.decodeAudioData=()=>{started.resolve();return pending.promise;};
+    const listening=audio.listen(()=>{},null,[{id:0,frequency:261.63,blob:new Blob(['test'])}]);
+    await started.promise;audio.stopListening();
+    pending.resolve({sampleRate:48000,getChannelData:()=>new Float32Array(48000)});
+    assert.equal(await listening,false);assert.equal(requested,0);
+  }finally{audio.dispose();restore();}
+});
+test('an unreadable legacy recording keeps a safe fallback instead of breaking listening',async()=>{
+  const restore=environment();const audio=new KalimbaAudio();
+  try{
+    const context=await audio.unlock();context.decodeAudioData=async()=>{throw new Error('Unsupported sample');};
+    const prepared=await audio.prepareKeys([{id:0,frequency:261.63,blob:new Blob(['old'])}]);
+    assert.equal(prepared[0].frequency,261.63);assert.equal(prepared[0].profile.signature,undefined);
   }finally{audio.dispose();restore();}
 });

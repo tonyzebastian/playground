@@ -1,7 +1,8 @@
 import { ListeningEngine } from './analysis.mjs';
+import { learnSignature, validSignature } from './signatures.mjs';
 
 export class KalimbaAudio {
-  constructor(){this.stream=null;this.context=null;this.frame=0;this.generation=0;this.playGeneration=0;this.recorder=null;this.sources=new Set();}
+  constructor(){this.stream=null;this.context=null;this.frame=0;this.generation=0;this.playGeneration=0;this.recorder=null;this.sources=new Set();this.signatures=new WeakMap();}
   async unlock(){
     if(!this.context || this.context.state==='closed'){
       const Context=window.AudioContext||window.webkitAudioContext;
@@ -16,6 +17,8 @@ export class KalimbaAudio {
     if(!window.isSecureContext) throw new Error('Open the HTTPS version of this page to use the microphone.');
     if(!navigator.mediaDevices?.getUserMedia) throw new Error('Microphone access isn’t available in this browser.');
     await this.unlock();
+    const prepared=await this.prepareKeys(keys);
+    if(generation!==this.generation)return false;
     let stream;
     try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},video:false});}
     catch(error){
@@ -27,13 +30,13 @@ export class KalimbaAudio {
     stream.getAudioTracks()[0].onended=()=>{this.stopListening();onEnd?.();};
     try{
       if(this.context.audioWorklet&&window.AudioWorkletNode){
-        if(!this.workletModule)this.workletModule=this.context.audioWorklet.addModule('/kalimba-audio/processor.js?v=2').catch(error=>{this.workletModule=null;throw error;});
+        if(!this.workletModule)this.workletModule=this.context.audioWorklet.addModule('/kalimba-audio/processor.js?v=3').catch(error=>{this.workletModule=null;throw error;});
         await this.workletModule;
         if(generation!==this.generation)return false;
         const input=this.context.createMediaStreamSource(stream);
         const node=new window.AudioWorkletNode(this.context,'kalimba-listener',{
           numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1],
-          processorOptions:{keys:keys.map(({id,frequency,profile})=>({id,frequency,profile}))},
+          processorOptions:{keys:prepared.map(({id,frequency,profile})=>({id,frequency,profile}))},
         });
         this.input=input;this.worklet=node;
         let lastUi=-Infinity;
@@ -51,7 +54,7 @@ export class KalimbaAudio {
         const input=this.context.createMediaStreamSource(stream),analyser=this.context.createAnalyser();
         analyser.fftSize=4096;analyser.smoothingTimeConstant=0;input.connect(analyser);
         this.input=input;this.analyser=analyser;
-        const engine=new ListeningEngine(this.context.sampleRate,keys),buffer=new Float32Array(4096);
+        const engine=new ListeningEngine(this.context.sampleRate,prepared),buffer=new Float32Array(4096);
         this.frame=setInterval(()=>{
           if(generation!==this.generation)return;
           analyser.getFloatTimeDomainData(buffer);
@@ -63,6 +66,23 @@ export class KalimbaAudio {
       }
       return true;
     }catch(error){if(generation===this.generation)this.stopListening();throw error;}
+  }
+
+  async prepareKeys(keys){
+    const prepared=[];
+    for(const key of keys){
+      if(validSignature(key.profile?.signature,this.context.sampleRate)||!key.blob){prepared.push(key);continue;}
+      let signature=this.signatures.get(key.blob);
+      if(!validSignature(signature,this.context.sampleRate)){
+        try{
+          const decoded=await this.context.decodeAudioData(await key.blob.arrayBuffer());
+          signature=learnSignature(decoded.getChannelData(0),decoded.sampleRate);
+          if(signature)this.signatures.set(key.blob,signature);
+        }catch{/* Old or unsupported samples keep the conservative pitch fallback. */}
+      }
+      prepared.push({...key,profile:{...key.profile,signature}});
+    }
+    return prepared;
   }
 
   startRecording(){

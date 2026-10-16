@@ -82,6 +82,7 @@ export default function KalimbaApp({art}){
   useEffect(()=>{
     onHear.current=result=>{
       setSignal(Math.min(1,result.rms*12));
+      if(result.ambiguous&&!result.pluck){setMessage('Sounds overlap. Try one clear pluck.');return;}
       if(!result.pluck || !result.frequency)return;
       const key=Number.isInteger(result.keyId)?keys.find(k=>k.id===result.keyId):nearestKey(result.frequency,keys);
       if(!key){setMessage('Try one clear pluck.');return;}
