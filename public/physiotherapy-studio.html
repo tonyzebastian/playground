@@ -933,7 +933,7 @@ document.title = 'Physiotherapy Studio - UiGlow';
   const st = ui.st;
   const ic = (d) => `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
   const ICON = { play:ic('<polygon points="6 3 20 12 6 21 6 3"/>'), pause:ic('<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>'),
-    restart:ic('<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>'), chev:ic('<path d="m6 9 6 6 6-6"/>'), check:ic('<path d="M20 6 9 17l-5-5"/>'), right:ic('<path d="m9 18 6-6-6-6"/>'), info:ic('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>') };
+    restart:ic('<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>'), chev:ic('<path d="m6 9 6 6 6-6"/>'), check:ic('<path d="M20 6 9 17l-5-5"/>'), right:ic('<path d="m9 18 6-6-6-6"/>'), more:ic('<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>'), left:ic('<path d="m15 18-6-6 6-6"/>'), info:ic('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>') };
   const css = `
     html,body{background:#fff!important;background-image:none!important}
     body{font-family:Arial,Helvetica,sans-serif;color:#0f172a;padding:0!important;min-height:100vh;align-items:stretch!important;font-size:14px}
@@ -945,7 +945,7 @@ document.title = 'Physiotherapy Studio - UiGlow';
     .pg-head .cur{color:#0f172a;font-weight:500}.pg-head .sep{display:inline-flex;color:#64748b}
     .stage{max-width:1320px!important;width:100%;margin:0 auto;flex:1;display:flex;align-items:center;justify-content:center;padding:0 16px}
     #fig{max-width:1320px!important;margin:0!important;max-height:calc(100vh - 220px);width:100%}
-    .pg-bar{align-self:center;margin:4px 16px 92px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -4px rgba(0,0,0,.1);padding:8px 14px;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px 14px}
+    .pg-bar{align-self:center;flex-wrap:nowrap!important;margin:4px 16px 92px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -4px rgba(0,0,0,.1);padding:8px 14px;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px 14px}
     .pg-bar .grp{display:flex;align-items:center;gap:8px}
     .pg-bar .sepv{width:1px;height:24px;background:#e2e8f0}
     .pg-bar button{font:inherit;font-size:13px;font-weight:500;border:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;border-radius:6px;transition:background .15s}
@@ -959,7 +959,7 @@ document.title = 'Physiotherapy Studio - UiGlow';
     .sel{position:relative}
     .sel .trg{background:#fff!important;border:1px solid #e2e8f0!important;color:#0f172a;padding:0 8px 0 10px!important;justify-content:space-between!important;min-width:0;gap:8px}
     .sel .trg svg{opacity:.5}
-    .sel .dot{width:16px;height:16px;border-radius:50%;border:1px solid #cbd5e1;display:inline-block;flex:none}
+    .pop .dot,.sel .dot{width:16px;height:16px;border-radius:50%;border:1px solid #cbd5e1;display:inline-block;flex:none}
     .sel .menu{display:none;position:absolute;bottom:calc(100% + 6px);left:0;min-width:100%;background:#fff;border:1px solid #e2e8f0;border-radius:6px;box-shadow:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1);padding:4px;z-index:10}
     .sel.open .menu{display:block}
     .sel .menu button{width:100%;justify-content:flex-start;background:transparent;height:auto;padding:5px 26px 5px 8px;font-weight:400;font-size:13px;position:relative;border-radius:4px;white-space:nowrap}
@@ -972,12 +972,24 @@ document.title = 'Physiotherapy Studio - UiGlow';
     html.embed body{min-height:100vh;justify-content:center}
     html.embed .stage{padding:0;margin:0}
     html.embed #fig{max-height:100vh}
-    .info{position:relative}
-    .info .pop{display:none;position:absolute;bottom:calc(100% + 10px);right:-12px;width:248px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1);padding:12px 14px;font-size:14px;line-height:1.45;color:#475569;z-index:10;text-align:left}
-    .info.open .pop{display:block}
+    .pg-bar .more{display:none}
+    .info,.more{position:relative}
+    .pg-bar .ghost{background:transparent;color:#475569;padding:0}.pg-bar .ghost:hover{background:#f1f5f9;color:#0f172a}
+    .pop{display:none;position:absolute;bottom:calc(100% + 13px);background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1);z-index:10;text-align:left;color:#475569}
+    .grp.open .pop{display:block}
+    .info .pop{right:-14px;width:248px;padding:12px 14px;font-size:14px;line-height:1.45}
     .info .pop b{display:block;color:#0f172a;font-weight:500;margin-bottom:2px}
     .info .pop a{color:#0f172a;text-decoration:underline;text-underline-offset:3px;text-decoration-color:#cbd5e1}.info .pop a:hover{text-decoration-color:#0f172a}
-    @media (max-width:560px){.pg-bar{padding:8px 12px;gap:8px 12px}.pg-bar .sepv{display:none}}`;
+    .more .pop{left:50%;transform:translateX(-50%);width:208px;padding:4px}
+    .pop .mi,.pop .mb,.pop .mo{width:100%;height:auto!important;justify-content:space-between!important;background:transparent;color:#0f172a;font-weight:400!important;font-size:13px!important;padding:7px 8px!important;border-radius:4px!important}
+    .pop .mi:hover,.pop .mb:hover,.pop .mo:hover{background:#f1f5f9}
+    .pop .mv{display:inline-flex;align-items:center;gap:6px;color:#64748b}
+    .pop .mb{justify-content:flex-start!important;gap:6px;color:#475569;border-bottom:1px solid #f1f5f9;border-radius:4px 4px 0 0!important;margin-bottom:4px}
+    .pop .mo span{display:inline-flex;align-items:center;gap:8px}.pop .mo .ck{visibility:hidden}.pop .mo.on .ck{visibility:visible}
+    .pop .mw{padding:10px 8px 8px;display:flex;align-items:center;gap:10px;font-size:13px}.pop .mw input{flex:1;width:auto}
+    .sel .menu{bottom:calc(100% + 13px)!important}
+    @media (max-width:640px){.pg-bar .opt{display:none!important}.pg-bar .more{display:flex}}
+    @media (max-width:560px){.pg-bar{padding:8px 12px;gap:8px 12px}}`;
   document.head.insertAdjacentHTML('beforeend', `<style>${css}</style>`);
   const EMBED = new URLSearchParams(location.search).has('embed'); if (EMBED) document.documentElement.classList.add('embed');
   document.body.insertAdjacentHTML('afterbegin', `<nav class="pg-head" aria-label="breadcrumb"><ol><li><a href="https://www.tonyzeb.com/">Tony</a></li><li><span class="sep">${ICON.right}</span><a href="/">Playground</a></li><li><span class="sep">${ICON.right}</span><span class="cur" aria-current="page">Physiotherapy Studio</span></li></ol></nav>`);
@@ -991,11 +1003,11 @@ document.title = 'Physiotherapy Studio - UiGlow';
       menu.innerHTML = items.map(([k, n]) => `<button role="option" data-k="${k}" class="${k === get() ? 'on' : ''}">${label(k, n)}<span class="ck">${ICON.check}</span></button>`).join(''); };
     trg.onclick = e => { e.stopPropagation(); const o = w.classList.contains('open'); document.querySelectorAll('.sel.open').forEach(x => x.classList.remove('open')); if (!o) w.classList.add('open'); };
     menu.onclick = e => { const b = e.target.closest('button'); if (!b) return; set(b.dataset.k); w.classList.remove('open'); draw(); };
-    draw(); return w;
+    draw(); w.redraw = draw; return w;
   };
   const bar = document.createElement('div'); bar.className = 'pg-bar';
   const ppBtn = document.createElement('button'), rsBtn = document.createElement('button');
-  ppBtn.className = 'b-primary'; rsBtn.className = 'b-sec';
+  ppBtn.className = 'b-sec'; rsBtn.className = 'b-sec';
   const drawPP = () => { ppBtn.innerHTML = st.paused ? ICON.play : ICON.pause; ppBtn.title = st.paused ? 'Play' : 'Pause'; ppBtn.setAttribute('aria-label', ppBtn.title); };
   rsBtn.innerHTML = ICON.restart; rsBtn.title = 'Restart'; rsBtn.setAttribute('aria-label', 'Restart');
   ppBtn.onclick = () => { st.paused = !st.paused; drawPP(); };
@@ -1003,20 +1015,36 @@ document.title = 'Physiotherapy Studio - UiGlow';
   drawPP();
   const g1 = document.createElement('div'); g1.className = 'grp'; g1.append(ppBtn);
   const spd = mkSel('spd', [['0.5', 'Slow'], ['1', 'Normal'], ['2', 'Fast']], () => String(st.speed), v => { st.speed = +v; });
-  const g2 = document.createElement('div'); g2.className = 'grp'; g2.append(spd);
+  const g2 = document.createElement('div'); g2.className = 'grp opt'; g2.append(spd);
   const wl = document.createElement('label'); wl.innerHTML = '<span>Wobble</span><input type="range" min="0" max="7" step="0.1" value="2.4" aria-label="Hand-drawn wobble">';
   wl.querySelector('input').oninput = e => document.getElementById('wob').setAttribute('scale', (e.target.value * INK_K).toFixed(2));
-  const g3 = document.createElement('div'); g3.className = 'grp'; g3.append(wl);
+  const g3 = document.createElement('div'); g3.className = 'grp opt'; g3.append(wl);
   const col = mkSel('col', Object.keys(NAMES).map(k => [k, NAMES[k]]), () => st.pal, v => { st.pal = v; ui.render(); }, k => PALS[k].l);
-  const g4 = document.createElement('div'); g4.className = 'grp'; g4.append(col);
-  const sep = () => { const d = document.createElement('div'); d.className = 'sepv'; return d; };
+  const g4 = document.createElement('div'); g4.className = 'grp opt'; g4.append(col);
+  const sep = (c = '') => { const d = document.createElement('div'); d.className = 'sepv ' + c; return d; };
   const g5 = document.createElement('div'); g5.className = 'grp info';
-  g5.innerHTML = `<button class="b-sec" aria-label="About this figure" aria-haspopup="dialog" style="width:32px;padding:0">${ICON.info}</button><div class="pop" role="dialog"><b>Physiotherapy Studio</b>A hand-inked isometric studio where everyone is mid-exercise.<br><a href="https://april-zhu.com/colorfigures" target="_blank" rel="noopener">Made with Colorfigures ↗</a></div>`;
-  g5.querySelector('button').onclick = e => { e.stopPropagation(); document.querySelectorAll('.sel.open').forEach(x => x.classList.remove('open')); g5.classList.toggle('open'); };
+  g5.innerHTML = `<button class="ghost" aria-label="About this figure" aria-haspopup="dialog" style="width:32px">${ICON.info}</button><div class="pop" role="dialog"><b>Physiotherapy Studio</b>A hand-inked isometric studio where everyone is mid-exercise.<br><a href="https://april-zhu.com/colorfigures" target="_blank" rel="noopener">Made with Colorfigures ↗</a></div>`;
+  g5.querySelector('button').onclick = e => { e.stopPropagation(); document.querySelectorAll('.sel.open').forEach(x => x.classList.remove('open')); document.querySelectorAll('.sel.open,.grp.open').forEach(x => x !== g5 && x.classList.remove('open')); g5.classList.toggle('open'); };
   g5.querySelector('.pop').onclick = e => e.stopPropagation();
-  bar.append(g1, sep(), g2, sep(), g3, sep(), g4, sep(), g5);
+  // small screens: speed / wobble / colour fold into a three-dots menu with sub menus
+  const gm = document.createElement('div'); gm.className = 'grp more';
+  gm.innerHTML = `<button class="b-sec" aria-label="More options" aria-haspopup="menu" style="width:32px;padding:0">${ICON.more}</button><div class="pop" role="menu"></div>`;
+  const mpop = gm.querySelector('.pop'); let view = 'root', wobV = '2.4';
+  const SPEEDS = [['0.5', 'Slow'], ['1', 'Normal'], ['2', 'Fast']], dotOf = k => `<span class="dot" style="background:${PALS[k].l}"></span>`;
+  const drawM = () => {
+    const sp = SPEEDS.find(x => x[0] === String(st.speed))[1], head = t => `<button class="mb" data-go="root">${ICON.left}<span>${t}</span></button>`;
+    if (view === 'root') mpop.innerHTML = `<button class="mi" data-go="speed" role="menuitem"><span>Speed</span><span class="mv">${sp}${ICON.right}</span></button><button class="mi" data-go="wobble" role="menuitem"><span>Wobble</span><span class="mv">${ICON.right}</span></button><button class="mi" data-go="colour" role="menuitem"><span>Colour</span><span class="mv">${dotOf(st.pal)}${NAMES[st.pal]}${ICON.right}</span></button>`;
+    else if (view === 'speed') mpop.innerHTML = head('Speed') + SPEEDS.map(([k, n]) => `<button class="mo ${String(st.speed) === k ? 'on' : ''}" data-speed="${k}"><span>${n}</span><span class="ck">${ICON.check}</span></button>`).join('');
+    else if (view === 'wobble') mpop.innerHTML = head('Wobble') + `<div class="mw"><input type="range" min="0" max="7" step="0.1" value="${wobV}" aria-label="Hand-drawn wobble"></div>`;
+    else mpop.innerHTML = head('Colour') + Object.keys(NAMES).map(k => `<button class="mo ${st.pal === k ? 'on' : ''}" data-col="${k}"><span>${dotOf(k)}${NAMES[k]}</span><span class="ck">${ICON.check}</span></button>`).join('');
+    const w = mpop.querySelector('.mw input'); if (w) w.oninput = e => { wobV = e.target.value; wl.querySelector('input').value = wobV; document.getElementById('wob').setAttribute('scale', (wobV * INK_K).toFixed(2)); };
+  };
+  gm.querySelector('button').onclick = e => { e.stopPropagation(); document.querySelectorAll('.sel.open,.grp.open').forEach(x => x !== gm && x.classList.remove('open')); view = 'root'; drawM(); gm.classList.toggle('open'); };
+  mpop.onclick = e => { e.stopPropagation(); const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.go) { view = b.dataset.go; drawM(); } else if (b.dataset.speed) { st.speed = +b.dataset.speed; spd.redraw(); drawM(); } else if (b.dataset.col) { st.pal = b.dataset.col; col.redraw(); ui.render(); drawM(); } };
+  bar.append(g1, sep(), g2, sep('opt'), g3, sep('opt'), g4, sep('opt'), gm, sep('more'), g5);
   document.querySelector('.stage').after(bar);
-  document.addEventListener('click', () => document.querySelectorAll('.sel.open,.info.open').forEach(x => x.classList.remove('open')));
+  document.addEventListener('click', () => document.querySelectorAll('.sel.open,.grp.open').forEach(x => x.classList.remove('open')));
   window.__bar = { ppBtn, rsBtn };
   setInterval(() => { const n = performance.now(), dt = Math.min(.1, (n - (setInterval.last || n))/1000); setInterval.last = n; if (!st.paused){ st.t += dt*st.speed; ui.render(); } }, EMBED ? 90 : 50);
 })();
