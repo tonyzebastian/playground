@@ -32,6 +32,18 @@ const galleryCatalog = [
     size: { width: 280, height: 200 },
     link: '/experiences/fish',
   }),
+  componentCard('flock', 'Flock', {
+    title: 'Flock in Flight',
+    size: { width: 280, height: 200 },
+    link: '/experiences/flock',
+    backgroundColor: '#3f5f86',
+  }),
+  componentCard('physio-studio', 'PhysioStudio', {
+    title: 'Physiotherapy Studio',
+    size: { width: 300, height: 210 },
+    link: '/physiotherapy-studio.html',
+    backgroundColor: '#ffffff',
+  }),
   videoCard('vision-reveal', {
     content: '/thumbnails/vision_reveal.mp4',
     title: 'Vision Reveal',
