@@ -249,79 +249,85 @@ void main() {
   outColor = vec4(applyFog(c, d), 1.0);
 }`;
 
-const CHAR_VERT = `#version 300 es
+// ---- the logo rock -------------------------------------------------------------------------------
+// The logo's silhouette becomes a boulder. A signed-distance texture of the logo (distance inward from its edge)
+// drives a rounded bevel, so thin strokes turn into pillowy stone ridges; noise breaks the outline up and a few
+// ridged octaves give it a chiselled surface. The height field is evaluated in the vertex shader (mesh) and again
+// per pixel (normals), so the stone keeps fine detail without a dense mesh.
+const ROCK_LIB = `
+uniform sampler2D uSdf;
+uniform vec2 uExtent;      // padded logo rectangle, in logo units (long side of the logo = 1)
+uniform float uDMax, uT, uRb, uNoise, uFreq, uRough, uSeed, uInflate;
+float rockH(vec2 p) {
+  vec2 uv = p / uExtent + 0.5;
+  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return 0.0;
+  float d = (textureLod(uSdf, uv, 0.0).r - 0.5) * 2.0 * uDMax + uInflate;   // signed distance to the logo's edge (+ inside), grown by Inflate
+  float nz = 0.65 * vnoise(p * uFreq + uSeed) + 0.35 * vnoise(p * uFreq * 2.1 + uSeed * 1.3) - 0.5;   // low-frequency wobble only
+  d += nz * uNoise * 0.04;                                          // lumpy outline (absolute size, so it can't cut thin strokes apart)
+  if (d <= 0.0) return 0.0;
+  float x = clamp(d / uRb, 0.0, 1.0);
+  float prof = 1.0 - pow(1.0 - x, 1.8);                              // rounded shoulder, finite slope at the edge
+  float ridge = 1.0 - abs(2.0 * vnoise(p * uFreq * 2.6 + uSeed * 1.7) - 1.0);
+  float h = uT * prof;
+  h += uT * uRough * ((vnoise(p * uFreq * 3.0 + uSeed * 0.5) - 0.5) * 0.12 + (ridge - 0.5) * 0.08) * smoothstep(0.0, 0.3, prof);
+  return max(h, 0.0);
+}
+`;
+
+const ROCK_VERT = `#version 300 es
 precision highp float;
-layout(location=0) in vec3 aPos;
-layout(location=1) in vec3 aNormal;
-layout(location=2) in vec2 aUv;
+layout(location=0) in vec2 aPos;       // (x, z) in logo units, centred on the logo
 uniform mat4 uVP;
 uniform mat4 uModel;
+out vec2 vP;
 out vec3 vWorld;
-out vec3 vN;
-out vec2 vUv;
+${NOISE}
+${ROCK_LIB}
 void main() {
-  vec4 w = uModel * vec4(aPos, 1.0);
+  float h = rockH(aPos);
+  vec4 w = uModel * vec4(aPos.x, h, aPos.y, 1.0);
+  vP = aPos;
   vWorld = w.xyz;
-  vN = normalize(mat3(uModel) * aNormal);
-  vUv = aUv;
   gl_Position = uVP * w;
 }`;
 
-// Metal/rough PBR-ish shading for the warrior: sun + sky ambient, GGX highlight, a cheap sky/ground
-// reflection for metal, normal map via screen-space derivatives (no tangents in the baked mesh).
-const CHAR_FRAG = `#version 300 es
+const ROCK_FRAG = `#version 300 es
 precision highp float;
+in vec2 vP;
 in vec3 vWorld;
-in vec3 vN;
-in vec2 vUv;
-uniform sampler2D uBase;       // sRGB texture, decoded to linear by the hardware
-uniform sampler2D uNormalMap;
-uniform sampler2D uORM;        // G roughness, B metallic
-uniform vec3 uCamera, uSun, uSunColor, uSky;
-uniform float uNormalStrength, uRoughMul, uMetalMul, uSpec, uExposure, uAmbient, uSunlight;
+uniform mat4 uModel;
+uniform vec3 uCamera, uSun, uSunColor, uSky, uStone, uMoss;
+uniform float uBright, uMossAmt, uAmbient, uSunlight;
 out vec4 outColor;
+${NOISE}
+${ROCK_LIB}
 ${FOG}
-vec3 perturb(vec3 N, vec3 p, vec2 uv, vec3 mapN) {
-  vec3 q0 = dFdx(p), q1 = dFdy(p);
-  vec2 st0 = dFdx(uv), st1 = dFdy(uv);
-  vec3 q1perp = cross(q1, N), q0perp = cross(N, q0);
-  vec3 T = q1perp * st0.x + q0perp * st1.x;
-  vec3 B = q1perp * st0.y + q0perp * st1.y;
-  float det = max(dot(T, T), dot(B, B));
-  float sc = det == 0.0 ? 0.0 : inversesqrt(det);
-  return normalize(T * (mapN.x * sc) + B * (mapN.y * sc) + N * mapN.z);
-}
 void main() {
-  vec3 N0 = normalize(gl_FrontFacing ? vN : -vN);
-  vec3 mapN = texture(uNormalMap, vUv).xyz * 2.0 - 1.0;
-  mapN.xy *= uNormalStrength;
-  vec3 N = perturb(N0, vWorld, vUv, normalize(mapN));
-  vec3 V = normalize(uCamera - vWorld);
-  vec3 albedo = texture(uBase, vUv).rgb;
-  vec4 orm = texture(uORM, vUv);
-  float rough = clamp(orm.g * uRoughMul, 0.05, 1.0);
-  float metal = clamp(orm.b * uMetalMul, 0.0, 1.0);
-  vec3 F0 = mix(vec3(0.04 * uSpec), albedo, metal);
+  float h = rockH(vP);
+  if (h <= 0.0004) discard;                                            // outside the rock
+  const float e = 0.004;
+  float hx = rockH(vP + vec2(e, 0.0)), hz = rockH(vP + vec2(0.0, e));
+  vec3 nObj = normalize(vec3(-(hx - h) / e, 1.0, -(hz - h) / e));
+  vec2 bump = vec2(vnoise(vP * 140.0 + 3.0), vnoise(vP * 140.0 + 17.0)) - 0.5;
+  nObj = normalize(nObj + vec3(bump.x, 0.0, bump.y) * 0.22 * uRough);  // fine grit
+  vec3 N = normalize(mat3(uModel) * nObj);
 
-  vec3 sunLin = pow(uSunColor, vec3(2.2)) * uSunlight;
-  vec3 skyLin = pow(uSky, vec3(2.2));
-  float ndl = max(dot(N, uSun), 0.0);
-  vec3 H = normalize(uSun + V);
-  float ndh = max(dot(N, H), 0.0), vdh = max(dot(V, H), 0.0), ndv = max(dot(N, V), 0.0);
-  float a = rough * rough, a2 = a * a;
-  float dd = ndh * ndh * (a2 - 1.0) + 1.0;
-  float D = a2 / (3.14159 * dd * dd);
-  vec3 F = F0 + (1.0 - F0) * pow(1.0 - vdh, 5.0);
+  // stone: broad tonal patches, fine grain, dark crack lines
+  float coarse = fbm(vP * 9.0 + 5.0);
+  float fine = vnoise(vP * 70.0);
+  vec3 stone = mix(uStone * 0.74, uStone * 1.2, coarse) * (0.9 + 0.2 * fine);
+  float crack = smoothstep(0.9, 1.0, 1.0 - abs(2.0 * vnoise(vP * 22.0 + 9.0) - 1.0));
+  stone *= 1.0 - 0.38 * crack;
 
-  vec3 diffuse = albedo * (1.0 - metal) * (sunLin * ndl + skyLin * (N.y * 0.5 + 0.5) * uAmbient);
-  vec3 spec = F * D * 0.25 * ndl * sunLin;
-  vec3 R = reflect(-V, N);
-  vec3 env = mix(vec3(0.05, 0.08, 0.04), skyLin, smoothstep(-0.2, 0.7, R.y));
-  vec3 Fe = F0 + (max(vec3(1.0 - rough), F0) - F0) * pow(1.0 - ndv, 5.0);
-  vec3 envSpec = Fe * env * (1.0 - rough * 0.7) * uAmbient;
+  // moss collects on upward-facing, lower parts, in patches
+  float up = smoothstep(0.5, 0.9, N.y);
+  float patchy = fbm(vP * 6.0 + 11.0);
+  float moss = uMossAmt * up * smoothstep(0.4, 0.62, patchy + (1.0 - h / uT) * 0.22);
+  vec3 c = mix(stone, uMoss * (0.8 + 0.4 * fine), moss);
 
-  vec3 c = (diffuse + spec + envSpec) * uExposure;
-  c = pow(max(c, 0.0), vec3(1.0 / 2.2));
+  float ao = mix(0.42, 1.0, smoothstep(0.0, 0.3, h / uT));             // darker where the stone meets the ground
+  vec3 ambient = mix(vec3(0.4, 0.37, 0.3), mix(uSky, vec3(0.55, 0.52, 0.45), 0.55), N.y * 0.5 + 0.5) * uAmbient;   // warm bounce, little blue
+  c *= (ambient + uSunColor * max(dot(N, uSun), 0.0) * uSunlight * 0.9) * ao * uBright;
   outColor = vec4(applyFog(c, distance(uCamera, vWorld)), 1.0);
 }`;
 
@@ -349,7 +355,7 @@ uniform vec3 uCamera;
 uniform vec3 uThin;      // thinning start, end, keep fraction at the far edge
 uniform vec4 uRect;
 uniform sampler2D uWindTex;
-uniform sampler2D uMask;     // top-down footprint of the warrior
+uniform sampler2D uMask;     // top-down footprint of the rock
 uniform vec4 uMaskRect;
 uniform vec2 uOver;          // grass kept / height multiplier where it grows through him
 out vec3 vNormal;
@@ -1031,120 +1037,206 @@ function flowerPalette(base, variation) {
   return out;
 }
 
-// ---- the character (a bounty hunter): baked static mesh + textures, and its top-down footprint -------------------
+// ---- the logo rock: image -> distance field + grid mesh, and its top-down footprint --------------------
 
-function loadTexture(gl, url, srgb) {
-  const tex = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([40, 40, 44, 255]));
-  const img = new Image();
-  img.decoding = "async";
-  img.onload = () => {
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, srgb ? gl.SRGB8_ALPHA8 : gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, img);
-    gl.generateMipmap(gl.TEXTURE_2D);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-    const aniso = gl.getExtension("EXT_texture_filter_anisotropic");
-    if (aniso) gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT, 8);
-  };
-  img.src = url;
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-  return tex;
+const ROCK_WORK = 512;          // working resolution (long side, pixels)
+const ROCK_PAD = 0.14;          // empty margin around the logo, in logo units
+const ROCK_DMAX = 0.12;         // distances are stored up to this many logo units
+const MASK_RES = 256;
+
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = url;
+  });
 }
 
-async function loadWarrior(gl, base = "/models/bounty-hunter") {
-  const meta = await (await fetch(`${base}/mesh.json`)).json();
-  const buf = await (await fetch(`${base}/mesh.bin`)).arrayBuffer();
+function boxBlur(a, w, h, r, passes) {
+  const t = new Float32Array(a.length);
+  for (let p = 0; p < passes; p++) {
+    for (let y = 0; y < h; y++) {
+      let sum = 0;
+      for (let x = -r; x <= r; x++) sum += a[y * w + Math.min(w - 1, Math.max(0, x))];
+      for (let x = 0; x < w; x++) {
+        t[y * w + x] = sum / (2 * r + 1);
+        sum += a[y * w + Math.min(w - 1, x + r + 1)] - a[y * w + Math.max(0, x - r)];
+      }
+    }
+    for (let x = 0; x < w; x++) {
+      let sum = 0;
+      for (let y = -r; y <= r; y++) sum += t[Math.min(h - 1, Math.max(0, y)) * w + x];
+      for (let y = 0; y < h; y++) {
+        a[y * w + x] = sum / (2 * r + 1);
+        sum += t[Math.min(h - 1, y + r + 1) * w + x] - t[Math.max(0, y - r) * w + x];
+      }
+    }
+  }
+}
+
+// Exact Euclidean distance transform (Felzenszwalb & Huttenlocher): distance from every inside pixel to the nearest outside one.
+function distanceInside(inside, w, h) {
+  const INF = 1e20;
+  const f = new Float32Array(w * h);
+  for (let i = 0; i < f.length; i++) f[i] = inside[i] ? INF : 0;
+  const n = Math.max(w, h);
+  const d = new Float32Array(n), v = new Int32Array(n), z = new Float32Array(n + 1);
+  const dt = (len) => {
+    let k = 0;
+    v[0] = 0; z[0] = -INF; z[1] = INF;
+    for (let q = 1; q < len; q++) {
+      let s;
+      while (true) {
+        const p = v[k];
+        s = ((d[q] + q * q) - (d[p] + p * p)) / (2 * q - 2 * p);
+        if (s <= z[k]) k--; else break;
+        if (k < 0) { k = 0; break; }
+      }
+      k++;
+      v[k] = q; z[k] = s; z[k + 1] = INF;
+    }
+    k = 0;
+    for (let q = 0; q < len; q++) {
+      while (z[k + 1] < q) k++;
+      const p = v[k];
+      d[q] = (q - p) * (q - p) + d[p];
+    }
+  };
+  const col = new Float32Array(h);
+  for (let x = 0; x < w; x++) {
+    for (let y = 0; y < h; y++) d[y] = f[y * w + x];
+    dt(h);
+    for (let y = 0; y < h; y++) col[y] = d[y], f[y * w + x] = d[y];
+  }
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) d[x] = f[y * w + x];
+    dt(w);
+    for (let x = 0; x < w; x++) f[y * w + x] = Math.sqrt(d[x]);
+  }
+  return f;
+}
+
+async function loadRock(gl, url = "/models/logo/logo.png") {
+  const img = await loadImage(url);
+  const long = Math.max(img.width, img.height);
+  const iw = img.width / long, ih = img.height / long;            // logo size in logo units (long side = 1)
+  const ew = iw + 2 * ROCK_PAD, eh = ih + 2 * ROCK_PAD;           // padded rectangle
+  const cw = Math.round(ROCK_WORK * (ew / Math.max(ew, eh))), ch = Math.round(ROCK_WORK * (eh / Math.max(ew, eh)));
+  const ppu = cw / ew;                                             // pixels per logo unit
+
+  // draw the (tiny) logo smoothly upscaled
+  const cv = document.createElement("canvas");
+  cv.width = cw; cv.height = ch;
+  const ctx = cv.getContext("2d", { willReadFrequently: true });
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, cw / 2 - (iw / 2) * ppu, ch / 2 - (ih / 2) * ppu, iw * ppu, ih * ppu);
+  const px = ctx.getImageData(0, 0, cw, ch).data;
+  let anyAlpha = false;
+  for (let i = 3; i < px.length; i += 4) if (px[i] < 250) { anyAlpha = true; break; }
+  const cover = new Float32Array(cw * ch);                          // how much of each pixel is the logo
+  for (let i = 0; i < cover.length; i++) {
+    cover[i] = anyAlpha ? px[i * 4 + 3] / 255 : 1 - (px[i * 4] * 0.3 + px[i * 4 + 1] * 0.59 + px[i * 4 + 2] * 0.11) / 255;
+  }
+  boxBlur(cover, cw, ch, 3, 2);                                     // smooths the pixel staircase of a 76px source
+  const inside = new Uint8Array(cw * ch);
+  for (let i = 0; i < inside.length; i++) inside[i] = cover[i] > 0.42 ? 1 : 0;
+
+  // signed distance to the edge in logo units (positive inside, negative outside), lightly smoothed so the rock
+  // reads as organic. Having the outside distance too lets the shape be grown (Inflate) to fatten thin strokes.
+  const inDist = distanceInside(inside, cw, ch);
+  const outside = new Uint8Array(cw * ch);
+  for (let i = 0; i < outside.length; i++) outside[i] = inside[i] ? 0 : 1;
+  const outDist = distanceInside(outside, cw, ch);
+  const dl = new Float32Array(cw * ch);
+  for (let i = 0; i < dl.length; i++) dl[i] = (inside[i] ? inDist[i] : -outDist[i]) / ppu;
+  boxBlur(dl, cw, ch, 3, 3);
+  const bytes = new Uint8Array(cw * ch);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = Math.max(0, Math.min(255, Math.round((dl[i] / (2 * ROCK_DMAX) + 0.5) * 255)));
+
+  const sdf = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, sdf);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, cw, ch, 0, gl.RED, gl.UNSIGNED_BYTE, bytes);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+  // white-on-transparent silhouette, used to draw the top-down footprint for the grass
+  const sil = document.createElement("canvas");
+  sil.width = cw; sil.height = ch;
+  const sctx = sil.getContext("2d");
+  const simg = sctx.createImageData(cw, ch);
+  for (let i = 0; i < inside.length; i++) { simg.data[i * 4] = simg.data[i * 4 + 1] = simg.data[i * 4 + 2] = 255; simg.data[i * 4 + 3] = inside[i] ? 255 : 0; }
+  sctx.putImageData(simg, 0, 0);
+
+  // flat grid; heights come from the shader
+  const long2 = Math.max(ew, eh);
+  const nx = Math.max(8, Math.round(240 * (ew / long2))), nz = Math.max(8, Math.round(240 * (eh / long2)));
+  const verts = new Float32Array((nx + 1) * (nz + 1) * 2);
+  for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) verts.set([(i / nx - 0.5) * ew, (j / nz - 0.5) * eh], (j * (nx + 1) + i) * 2);
+  const idx = new Uint32Array(nx * nz * 6);
+  let o = 0;
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+    const a = j * (nx + 1) + i, b = a + 1, c = a + nx + 1, d = c + 1;
+    idx.set([a, c, b, b, c, d], o); o += 6;
+  }
   const vao = gl.createVertexArray();
   const vbo = gl.createBuffer();
   const ibo = gl.createBuffer();
   gl.bindVertexArray(vao);
   gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-  gl.bufferData(gl.ARRAY_BUFFER, new Uint8Array(buf, 0, meta.indexOffset), gl.STATIC_DRAW);
+  gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
   gl.enableVertexAttribArray(0);
-  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, meta.stride, 0);
-  gl.enableVertexAttribArray(1);
-  gl.vertexAttribPointer(1, 3, gl.BYTE, true, meta.stride, 12);
-  gl.enableVertexAttribArray(2);
-  gl.vertexAttribPointer(2, 2, gl.UNSIGNED_SHORT, true, meta.stride, 16);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint8Array(buf, meta.indexOffset, meta.indices * 4), gl.STATIC_DRAW);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
   gl.bindVertexArray(null);
-  return {
-    meta, vao, vbo, ibo,
-    floats: new Float32Array(buf, 0, (meta.indexOffset / 4) | 0),
-    indices: new Uint32Array(buf, meta.indexOffset, meta.indices),
-    base: loadTexture(gl, `${base}/base.webp`, true),
-    normal: loadTexture(gl, `${base}/normal.webp`, false),
-    orm: loadTexture(gl, `${base}/orm.webp`, false),
-  };
+  return { vao, vbo, ibo, sdf, count: idx.length, extent: [ew, eh], sil, cw, ch };
 }
 
-function destroyWarrior(gl, w) {
-  [w.vbo, w.ibo].forEach((b) => gl.deleteBuffer(b));
-  gl.deleteVertexArray(w.vao);
-  [w.base, w.normal, w.orm].forEach((t) => gl.deleteTexture(t));
+function destroyRock(gl, r) {
+  [r.vbo, r.ibo].forEach((b) => gl.deleteBuffer(b));
+  gl.deleteVertexArray(r.vao);
+  gl.deleteTexture(r.sdf);
 }
 
-// Model matrix (column-major): uniform scale, yaw about Y, translation.
-function warriorModel(ch) {
+// Model matrix (column-major): uniform scale (world units per logo unit), yaw about Y, translation.
+function rockModel(ch) {
   const s = ch.scale, yaw = rad(ch.rotation), c = Math.cos(yaw), sn = Math.sin(yaw);
   return new Float32Array([s * c, 0, -s * sn, 0, 0, s, 0, 0, s * sn, 0, s * c, 0, ch.x, ch.lift, ch.z, 1]);
 }
 
-const MASK_RES = 256;
-
-// Rasterises the warrior's silhouette seen from above into a small R8 texture. Grass rooted
-// inside it is thinned and shortened in the vertex shader so blades don't spear through him.
-function buildMask(gl, tex, warrior, ch) {
-  const { meta } = warrior;
-  const r = Math.max(Math.abs(meta.min[0]), Math.abs(meta.max[0]), Math.abs(meta.min[2]), Math.abs(meta.max[2])) * ch.scale * 1.1 + 1;
+// Draws the rock's silhouette, seen from above, into a small R8 texture. Grass rooted inside it is thinned and
+// shortened in the vertex shader so blades don't spear through the stone.
+function buildRockMask(gl, tex, rock, ch) {
+  const [ew, eh] = rock.extent;
+  const r = Math.max(ew, eh) * 0.5 * ch.scale * 1.15 + 1;
   const rect = [ch.x - r, ch.z - r, 2 * r, 2 * r];
   const yaw = rad(ch.rotation), c = Math.cos(yaw), sn = Math.sin(yaw), s = ch.scale;
-  const nv = meta.vertices;
-  const gx = new Float32Array(nv), gz = new Float32Array(nv);
-  for (let i = 0; i < nv; i++) {
-    const x = warrior.floats[i * 5], z = warrior.floats[i * 5 + 2];
-    gx[i] = ((s * (x * c + z * sn) + ch.x - rect[0]) / rect[2]) * MASK_RES;
-    gz[i] = ((s * (-x * sn + z * c) + ch.z - rect[1]) / rect[3]) * MASK_RES;
-  }
+  const kx = ew / rock.cw, kz = eh / rock.ch;                       // logo units per source pixel
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = MASK_RES;
+  const ctx = cv.getContext("2d", { willReadFrequently: true });
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, MASK_RES, MASK_RES);
+  // source pixel (col, row) -> logo (x, z) -> world -> mask pixel
+  ctx.setTransform(
+    (s * c * kx * MASK_RES) / rect[2], (-s * sn * kx * MASK_RES) / rect[3],
+    (s * sn * kz * MASK_RES) / rect[2], (s * c * kz * MASK_RES) / rect[3],
+    ((s * c * (-ew / 2) + s * sn * (-eh / 2) + ch.x - rect[0]) / rect[2]) * MASK_RES,
+    ((-s * sn * (-ew / 2) + s * c * (-eh / 2) + ch.z - rect[1]) / rect[3]) * MASK_RES,
+  );
+  ctx.drawImage(rock.sil, 0, 0);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const data = ctx.getImageData(0, 0, MASK_RES, MASK_RES).data;
   const m = new Float32Array(MASK_RES * MASK_RES);
-  const idx = warrior.indices;
-  for (let t = 0; t < idx.length; t += 3) {
-    const a = idx[t], b = idx[t + 1], d = idx[t + 2];
-    const x0 = gx[a], y0 = gz[a], x1 = gx[b], y1 = gz[b], x2 = gx[d], y2 = gz[d];
-    const minX = Math.max(0, Math.floor(Math.min(x0, x1, x2))), maxX = Math.min(MASK_RES - 1, Math.ceil(Math.max(x0, x1, x2)));
-    const minY = Math.max(0, Math.floor(Math.min(y0, y1, y2))), maxY = Math.min(MASK_RES - 1, Math.ceil(Math.max(y0, y1, y2)));
-    const den = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2);
-    if (Math.abs(den) < 1e-9) continue;
-    for (let py = minY; py <= maxY; py++) {
-      for (let px = minX; px <= maxX; px++) {
-        const cx = px + 0.5, cy = py + 0.5;
-        const l0 = ((y1 - y2) * (cx - x2) + (x2 - x1) * (cy - y2)) / den;
-        const l1 = ((y2 - y0) * (cx - x2) + (x0 - x2) * (cy - y2)) / den;
-        const l2 = 1 - l0 - l1;
-        if (l0 >= -0.05 && l1 >= -0.05 && l2 >= -0.05) m[py * MASK_RES + px] = 1;
-      }
-    }
-  }
-  // two box blurs feather the edge so the thinning fades in rather than cutting a hard outline
-  const tmp = new Float32Array(m.length);
-  for (let pass = 0; pass < 2; pass++) {
-    for (let y = 0; y < MASK_RES; y++) for (let x = 0; x < MASK_RES; x++) {
-      let sum = 0;
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-        const xx = Math.min(MASK_RES - 1, Math.max(0, x + dx)), yy = Math.min(MASK_RES - 1, Math.max(0, y + dy));
-        sum += m[yy * MASK_RES + xx];
-      }
-      tmp[y * MASK_RES + x] = sum / 9;
-    }
-    m.set(tmp);
-  }
+  for (let i = 0; i < m.length; i++) m[i] = data[i * 4] / 255;
+  boxBlur(m, MASK_RES, MASK_RES, 3, 2);                              // wide feather: the grass thins out in a soft halo around the stone
   const bytes = new Uint8Array(m.length);
-  for (let i = 0; i < m.length; i++) bytes[i] = Math.min(255, Math.round(m[i] * 255 * 1.6));
+  for (let i = 0; i < m.length; i++) bytes[i] = Math.min(255, Math.round(m[i] * 255 * 2.6));
   gl.bindTexture(gl.TEXTURE_2D, tex);
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, MASK_RES, MASK_RES, 0, gl.RED, gl.UNSIGNED_BYTE, bytes);
@@ -1187,7 +1279,7 @@ const Meadow = forwardRef(function Meadow({ values }, ref) {
         wind: program(gl, FULLSCREEN_VERT, WIND_FRAG),
         ground: program(gl, GROUND_VERT, GROUND_FRAG),
         blade: program(gl, BLADE_VERT, BLADE_FRAG),
-        char: program(gl, CHAR_VERT, CHAR_FRAG),
+        rock: program(gl, ROCK_VERT, ROCK_FRAG),
         flower: program(gl, FLOWER_VERT, FLOWER_FRAG),
         particle: program(gl, PARTICLE_VERT, PARTICLE_FRAG),
         post: program(gl, FULLSCREEN_VERT, POST_FRAG),
@@ -1212,7 +1304,7 @@ const Meadow = forwardRef(function Meadow({ values }, ref) {
     // The painterly pass needs half-float render targets for its structure tensor.
     const paintSupported = !!(gl.getExtension("EXT_color_buffer_float") || gl.getExtension("EXT_color_buffer_half_float"));
     let scene = null;
-    let warrior = null;
+    let rock = null;
     let disposed = false;
     const maskTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, maskTex);
@@ -1224,12 +1316,12 @@ const Meadow = forwardRef(function Meadow({ values }, ref) {
     let maskRect = [0, 0, 1, 1];
     let maskKey = "";
     let maskTimer = 0;
-    loadWarrior(gl)
-      .then((w) => {
-        if (disposed) destroyWarrior(gl, w);
-        else warrior = w;
+    loadRock(gl)
+      .then((r) => {
+        if (disposed) destroyRock(gl, r);
+        else rock = r;
       })
-      .catch((err) => console.error("warrior failed to load", err));
+      .catch((err) => console.error("rock failed to build", err));
 
     // Plants the blades for the current camera and growth settings.
     apiRef.current = {
@@ -1416,48 +1508,49 @@ const Meadow = forwardRef(function Meadow({ values }, ref) {
       gl.bindVertexArray(ground.vao);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-      // 2b. the warrior (static, depth-tested so grass can sweep over and around him)
-      const ch = v.character;
-      const showWarrior = !!(warrior && ch && ch.show);
-      if (showWarrior) {
+      // 2b. the logo rock (static, depth-tested so grass can sweep over and around it)
+      const ch = v.rock;
+      const showRock = !!(rock && ch && ch.show);
+      if (showRock) {
         const key = [ch.x, ch.z, ch.rotation, ch.scale].join("|");
         if (key !== maskKey) {
           maskKey = key;
           clearTimeout(maskTimer);
           const snap = { x: ch.x, z: ch.z, rotation: ch.rotation, scale: ch.scale };
           maskTimer = setTimeout(() => {
-            if (warrior && !disposed) maskRect = buildMask(gl, maskTex, warrior, snap);
+            if (rock && !disposed) maskRect = buildRockMask(gl, maskTex, rock, snap);
           }, maskRect[2] === 1 ? 0 : 120);
         }
-        const C = progs.char;
+        const C = progs.rock;
         gl.useProgram(C);
         gl.uniformMatrix4fv(C.u("uVP"), false, cam.vp);
-        gl.uniformMatrix4fv(C.u("uModel"), false, warriorModel(ch));
+        gl.uniformMatrix4fv(C.u("uModel"), false, rockModel(ch));
         gl.activeTexture(gl.TEXTURE2);
-        gl.bindTexture(gl.TEXTURE_2D, warrior.base);
-        gl.activeTexture(gl.TEXTURE3);
-        gl.bindTexture(gl.TEXTURE_2D, warrior.normal);
-        gl.activeTexture(gl.TEXTURE4);
-        gl.bindTexture(gl.TEXTURE_2D, warrior.orm);
-        gl.uniform1i(C.u("uBase"), 2);
-        gl.uniform1i(C.u("uNormalMap"), 3);
-        gl.uniform1i(C.u("uORM"), 4);
+        gl.bindTexture(gl.TEXTURE_2D, rock.sdf);
+        gl.uniform1i(C.u("uSdf"), 2);
+        gl.uniform2fv(C.u("uExtent"), rock.extent);
+        f1(C, "uDMax", ROCK_DMAX);
+        f1(C, "uT", ch.thickness);
+        f1(C, "uRb", ch.roundness);
+        f1(C, "uNoise", ch.jaggedness);
+        f1(C, "uFreq", ch.grain);
+        f1(C, "uRough", ch.roughness);
+        f1(C, "uSeed", ch.seed);
+        f1(C, "uInflate", ch.inflate);
         gl.uniform3fv(C.u("uCamera"), eye);
-        const caz = rad(li.sunAzimuth), cel = rad(li.sunElevation);
-        f3(C, "uSun", [Math.cos(cel) * Math.sin(caz), Math.sin(cel), -Math.cos(cel) * Math.cos(caz)]);
+        f3(C, "uSun", [Math.cos(rad(li.sunElevation)) * Math.sin(rad(li.sunAzimuth)), Math.sin(rad(li.sunElevation)), -Math.cos(rad(li.sunElevation)) * Math.cos(rad(li.sunAzimuth))]);
         f3(C, "uSunColor", hex(li.sunColor));
         f3(C, "uSky", hex(li.skyColor));
-        f1(C, "uNormalStrength", ch.normalStrength);
-        f1(C, "uRoughMul", ch.roughness);
-        f1(C, "uMetalMul", ch.metalness);
-        f1(C, "uSpec", ch.specular);
-        f1(C, "uExposure", ch.brightness);
+        f3(C, "uStone", hex(ch.stone));
+        f3(C, "uMoss", hex(ch.mossColor));
+        f1(C, "uMossAmt", ch.moss);
+        f1(C, "uBright", ch.brightness);
         f1(C, "uAmbient", ch.ambient);
-        f1(C, "uSunlight", li.sunlight * 2.4);
+        f1(C, "uSunlight", li.sunlight * 1.25);
         f1(C, "uFog", at.haze);
         f3(C, "uFogColor", fogRgb);
-        gl.bindVertexArray(warrior.vao);
-        gl.drawElements(gl.TRIANGLES, warrior.meta.indices, gl.UNSIGNED_INT, 0);
+        gl.bindVertexArray(rock.vao);
+        gl.drawElements(gl.TRIANGLES, rock.count, gl.UNSIGNED_INT, 0);
         gl.activeTexture(gl.TEXTURE0);
       }
 
@@ -1486,7 +1579,7 @@ const Meadow = forwardRef(function Meadow({ values }, ref) {
       gl.bindTexture(gl.TEXTURE_2D, maskTex);
       gl.uniform1i(B.u("uMask"), 5);
       gl.uniform4fv(B.u("uMaskRect"), maskRect);
-      gl.uniform2f(B.u("uOver"), showWarrior ? ch.grassKeep : 1, showWarrior ? ch.grassHeight : 1);
+      gl.uniform2f(B.u("uOver"), showRock ? ch.grassKeep : 1, showRock ? ch.grassHeight : 1);
       gl.activeTexture(gl.TEXTURE0);
       gl.uniform3f(B.u("uThin"), at.thinStart, Math.max(at.thinEnd, at.thinStart + 1), at.thinKeep);
       f3(B, "uMeadow", hex(co.meadow));
@@ -1695,7 +1788,7 @@ const Meadow = forwardRef(function Meadow({ values }, ref) {
       destroyFlowers(gl, flowers);
       particles.bufs.forEach((b) => gl.deleteBuffer(b));
       gl.deleteVertexArray(particles.vao);
-      if (warrior) destroyWarrior(gl, warrior);
+      if (rock) destroyRock(gl, rock);
       gl.deleteTexture(maskTex);
       apiRef.current = null;
       cancelAnimationFrame(raf);
