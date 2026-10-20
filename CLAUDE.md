@@ -141,7 +141,7 @@ Interactive infinite canvas showcasing all projects:
 - 10000px canvas boundary
 
 ### 2. Content Sections
-- **Experiences**: Fish school, World clock, Car configurator
+- **Experiences**: Fish school, World clock, Car configurator, Flock in Flight
 - **UI Interactions**: Interactive visual demos + chat interface
 - **SVG Animations**: Coin flip, Comet hero, Unlock
 - **Tools**: Drawing canvas and Mosaic Image Lab
@@ -216,6 +216,13 @@ imageCard('fish', {
 Two variants via `variant` prop:
 - **Primary**: Rounded pill, fixed top-center (home page)
 - **Secondary**: Full-width, bottom border (sub-pages with title)
+
+### Flock in Flight (`/experiences/flock`)
+Top-down flock of birds over an endless painted landscape. Press and hold (mouse, touch, Space/Enter) to sweep the wings back and fly faster.
+- `Flock.jsx` owns the canvas loop, the birds (flap bouts / glides, swept pose) and input. `terrain.js` is the ground: a continuous `(u, w)` world rasterised in chunks with hill-shading, water, and vector trees/rocks/houses with cast shadows. `clouds.js` draws low clouds (under the flock, with ground shadows) and high clouds (over it).
+- Scenery changes by position through noise-warped zone borders, never a crossfade. Add a region by adding a ground function, `RELIEF` entry and `NB` count in `terrain.js`, plus its feature rules in `genFeatures`.
+- Pure canvas 2D, client-only, static-export safe. Phones (`pointer: coarse` or < 600px) use the `lite` quality path; it pauses off-screen via IntersectionObserver, which also keeps the gallery preview cheap.
+- `AppHeader` takes `tone="light"` for pages with a full-bleed picture behind the breadcrumb.
 
 ### Window 01 DialKit
 - `/feelings/window-01` keeps its art-direction DialKit hidden by default.

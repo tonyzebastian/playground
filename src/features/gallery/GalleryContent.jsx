@@ -12,6 +12,8 @@ const ComponentSkeleton = () => (
 
 const componentMap = {
   Clock: dynamic(() => import('@/app/experiences/clock/Clock')),
+  Flock: dynamic(() => import('@/app/experiences/flock/Flock')),
+  PhysioStudio: dynamic(() => import('@/features/gallery/PhysioPreview')),
   CoinFlip: dynamic(() => import('@/app/svg-animations/coinflip/CoinFlip')),
 };
 
