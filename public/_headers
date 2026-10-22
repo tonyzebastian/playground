@@ -5,6 +5,7 @@
   X-Robots-Tag: noindex, nofollow, noarchive
 
 /*
+  Strict-Transport-Security: max-age=31536000
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Content-Security-Policy: frame-ancestors 'self' https://www.tonyzeb.com https://tonyzeb.com
