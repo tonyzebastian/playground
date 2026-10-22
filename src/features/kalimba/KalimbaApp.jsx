@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import * as Dialog from '@radix-ui/react-dialog';
-import { Check, ChevronDown, Download, Mic, Pause, RotateCcw, Settings2, Upload, Volume2, X, Pencil } from 'lucide-react';
+import { Dialog } from '@base-ui/react/dialog';
+import { Check, CaretDown, DownloadSimple, Microphone, Pause, ArrowCounterClockwise, SlidersHorizontal, UploadSimple, SpeakerHigh, X, PencilSimple } from '@phosphor-icons/react';
 import KalimbaInstrument from './KalimbaInstrument';
 import RecordingPanel from './RecordingPanel';
 import { KalimbaAudio } from './audio';
@@ -233,13 +233,13 @@ export default function KalimbaApp({art}){
     <header className="kalimba-header">
       <span className="kalimba-wordmark">Kalimba</span>
       <div className="kalimba-header-right">
-        {editing&&complete&&<button className="kalimba-done" onClick={finishEditing} disabled={busy}>Done <Check size={14}/></button>}
-        <button className="kalimba-header-settings" aria-label="Instrument settings" onClick={()=>openSheet('settings')} disabled={busy}><Settings2 size={18}/></button>
+        {editing&&complete&&<button className="kalimba-done" onClick={finishEditing} disabled={busy}>Done <Check weight="bold" size={14}/></button>}
+        <button className="kalimba-header-settings" aria-label="Instrument settings" onClick={()=>openSheet('settings')} disabled={busy}><SlidersHorizontal weight="bold" size={18}/></button>
       </div>
     </header>
 
     <div className="kalimba-song-selection">
-      {!loaded?<span className="kalimba-top-hint">Opening your instrument…</span>:editing?<span className="kalimba-top-hint">{editing==='setup'?`Tap a key to record · ${keys.length}/9 saved`:'Tap a key to change its sound.'}</span>:<button className="kalimba-song-trigger" onClick={()=>openSheet('songs')} aria-label="Choose song or free play"><span>{song?.title??'Free play'}{mapped?.adapted&&<small>Adapted to your keys</small>}</span><ChevronDown size={15}/></button>}
+      {!loaded?<span className="kalimba-top-hint">Opening your instrument…</span>:editing?<span className="kalimba-top-hint">{editing==='setup'?`Tap a key to record · ${keys.length}/9 saved`:'Tap a key to change its sound.'}</span>:<button className="kalimba-song-trigger" onClick={()=>openSheet('songs')} aria-label="Choose song or free play"><span>{song?.title??'Free play'}{mapped?.adapted&&<small>Adapted to your keys</small>}</span><CaretDown weight="bold" size={15}/></button>}
     </div>
 
     <div className="kalimba-workspace">
@@ -249,11 +249,11 @@ export default function KalimbaApp({art}){
 
 
       {!editing&&loaded&&<div className="kalimba-device-playback">
-        {song&&<button className="kalimba-device-small" aria-label={playing?'Stop melody':'Hear melody'} onClick={()=>playing?stop():demonstrate()} disabled={pending}><Volume2 size={18}/></button>}
+        {song&&<button className="kalimba-device-small" aria-label={playing?'Stop melody':'Hear melody'} onClick={()=>playing?stop():demonstrate()} disabled={pending}><SpeakerHigh weight="bold" size={18}/></button>}
         <button className="kalimba-device-start" onClick={()=>listening||pending?stop():startListening(!!song)} aria-label={pending?'Cancel microphone request':listening?'Pause listening':song?'Start song practice':'Start free play'}>
-          {listening?<Pause size={21}/>:pending?<X size={20}/>:<Mic size={21}/>}
+          {listening?<Pause weight="bold" size={21}/>:pending?<X weight="bold" size={20}/>:<Microphone weight="bold" size={21}/>}
         </button>
-        {song&&<button className="kalimba-device-small" aria-label="Restart song" onClick={()=>{stop();setStep(0);setHits(0);setFinished(false);finishedRef.current=false;setMessage('');}} disabled={pending}><RotateCcw size={17}/></button>}
+        {song&&<button className="kalimba-device-small" aria-label="Restart song" onClick={()=>{stop();setStep(0);setHits(0);setFinished(false);finishedRef.current=false;setMessage('');}} disabled={pending}><ArrowCounterClockwise weight="bold" size={17}/></button>}
         <span className="kalimba-device-caption">{pending?'Connecting…':listening?'Listening':finished?'Play again':song?'Start practice':'Start listening'}</span>
       </div>}
 
@@ -270,9 +270,9 @@ export default function KalimbaApp({art}){
 
     <Dialog.Root open={!!sheet} onOpenChange={open=>{if(!open){if(saving)return;if(sheet==='record'){stop();setSelected(null);setCandidate(null);setError('');}setSheet(null);}}}>
       <Dialog.Portal container={root.current}>
-        <Dialog.Overlay className="kalimba-sheet-overlay"/>
-        <Dialog.Content className={`kalimba-sheet ${sheet==='record'?'kalimba-recording-sheet':''}`} onCloseAutoFocus={event=>{const id=recordFocus.current;if(Number.isInteger(id)){event.preventDefault();recordFocus.current=null;requestAnimationFrame(()=>root.current?.querySelector(`[aria-label^="Key ${id+1},"]`)?.focus());}}}>
-          <div className="kalimba-sheet-heading"><Dialog.Title>{sheet==='record'?`Key ${selected+1}`:sheet==='songs'?'Play something':'Your instrument'}</Dialog.Title><Dialog.Close className="kalimba-sheet-close" aria-label="Close" disabled={saving}><X size={18}/></Dialog.Close></div>
+        <Dialog.Backdrop className="kalimba-sheet-overlay"/>
+        <Dialog.Popup className={`kalimba-sheet ${sheet==='record'?'kalimba-recording-sheet':''}`} finalFocus={()=>{const id=recordFocus.current;if(Number.isInteger(id)){recordFocus.current=null;return root.current?.querySelector(`[aria-label^="Key ${id+1},"]`)||true;}return true;}}>
+          <div className="kalimba-sheet-heading"><Dialog.Title>{sheet==='record'?`Key ${selected+1}`:sheet==='songs'?'Play something':'Your instrument'}</Dialog.Title><Dialog.Close className="kalimba-sheet-close" aria-label="Close" disabled={saving}><X weight="bold" size={18}/></Dialog.Close></div>
           <Dialog.Description className="kalimba-sr-only">{sheet==='record'?'Record three plucks of this key. We compare pitch consistency and keep the best matches.':sheet==='songs'?'Choose a melody that fits your recorded notes, or free play.':'Edit recorded keys, adjust practice, and manage your saved instrument.'}</Dialog.Description>
           {sheet==='record'&&Number.isInteger(selected)?<RecordingPanel
             selected={selected} setup={editing==='setup'} keys={keys} currentKey={currentKey} candidate={candidate} recording={recording} pending={pending} saving={saving}
@@ -281,24 +281,24 @@ export default function KalimbaApp({art}){
             onRecord={startRecording} onFinish={()=>finishRecording()} onSave={acceptRecording}
             onReplay={()=>engine().play(currentKey).catch(err=>setError(err.message))} onCancel={stop}
           />:sheet==='songs'?<div className="kalimba-song-list">
-            <button onClick={()=>chooseSong(null)} aria-pressed={!song}><span><strong>Free play</strong><small>No song. Just your instrument.</small></span>{!song&&<Check size={16}/>}</button>
-            {SONGS.map(item=>{const arrangement=playableSong(item,keys);return <button key={item.id} disabled={!arrangement} aria-pressed={songId===item.id} onClick={()=>chooseSong(item)}><span><strong>{item.title}</strong><small>{arrangement?.adapted?'Adapted to your recorded keys':arrangement?item.detail:'Finish recording your keys'}</small></span>{songId===item.id&&<Check size={16}/>}</button>;})}
+            <button onClick={()=>chooseSong(null)} aria-pressed={!song}><span><strong>Free play</strong><small>No song. Just your instrument.</small></span>{!song&&<Check weight="bold" size={16}/>}</button>
+            {SONGS.map(item=>{const arrangement=playableSong(item,keys);return <button key={item.id} disabled={!arrangement} aria-pressed={songId===item.id} onClick={()=>chooseSong(item)}><span><strong>{item.title}</strong><small>{arrangement?.adapted?'Adapted to your recorded keys':arrangement?item.detail:'Finish recording your keys'}</small></span>{songId===item.id&&<Check weight="bold" size={16}/>}</button>;})}
           </div>:<div className="kalimba-settings-content">
-            <button className="kalimba-settings-edit" disabled={!loaded} onClick={()=>editKeys(false)}><span><Pencil size={16}/> Edit keys</span><span>{keys.length}/9 recorded</span></button>
+            <button className="kalimba-settings-edit" disabled={!loaded} onClick={()=>editKeys(false)}><span><PencilSimple weight="bold" size={16}/> Edit keys</span><span>{keys.length}/9 recorded</span></button>
             {complete&&<div className="kalimba-settings-group">
               <label>Practice mode<select value={mode} onChange={event=>setMode(event.target.value)}><option value="wait">Wait for me</option><option value="time">Keep time</option></select></label>
               <label>Tempo <span>{tempo} BPM</span><input aria-label="Tempo" type="range" min="35" max="140" value={tempo} onChange={event=>setTempo(Number(event.target.value))}/></label>
               <label className="kalimba-check-label">Loop song<input type="checkbox" checked={loop} onChange={event=>setLoop(event.target.checked)}/></label>
             </div>}
             <div className="kalimba-settings-group kalimba-storage-actions">
-              <button onClick={backup} disabled={!keys.length||saving}><Download size={16}/> Download backup</button>
-              <button onClick={()=>fileInput.current?.click()} disabled={saving}><Upload size={16}/> Restore backup</button>
+              <button onClick={backup} disabled={!keys.length||saving}><DownloadSimple weight="bold" size={16}/> Download backup</button>
+              <button onClick={()=>fileInput.current?.click()} disabled={saving}><UploadSimple weight="bold" size={16}/> Restore backup</button>
               <input ref={fileInput} type="file" accept="application/json,.json" hidden onChange={restore}/>
-              <button onClick={()=>editKeys(true)} disabled={!loaded}><RotateCcw size={16}/> Record all keys again</button>
+              <button onClick={()=>editKeys(true)} disabled={!loaded}><ArrowCounterClockwise weight="bold" size={16}/> Record all keys again</button>
             </div>
             <p className="kalimba-storage-note">Saved in this browser. A backup keeps a copy if website data is cleared. Restoring replaces the saved instrument.</p>
           </div>}
-        </Dialog.Content>
+        </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>
   </main>;
