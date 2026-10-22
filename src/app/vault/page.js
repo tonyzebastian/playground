@@ -6,6 +6,7 @@ const sections = [
   { href: "/vault/links", title: "Library", description: "A living index of visual references and websites worth returning to." },
   { href: "/vault/shaders", title: "Shaders", description: "Reusable visual pieces, their source, previews, contracts, and notes." },
   { href: "/vault/experiments/pond", title: "Layered pond", description: "A complete interactive experiment composed from shader and canvas pieces." },
+  { href: "/vault/experiments/turtle", title: "Happy turtle", description: "A cartoon sea turtle you can spin in 3D, drawn as pure SVG with no 3D library." },
 ];
 
 export default function VaultPage() {
