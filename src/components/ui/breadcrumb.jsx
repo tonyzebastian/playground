@@ -1,5 +1,8 @@
+"use client"
+
 import * as React from "react"
-import { Slot } from "@radix-ui/react-slot"
+import { useRender } from "@base-ui/react/use-render"
+import { mergeProps } from "@base-ui/react/merge-props"
 import { CaretRight, DotsThree } from "@phosphor-icons/react/ssr"
 
 import { cn } from "@/lib/utils"
@@ -28,15 +31,13 @@ const BreadcrumbItem = React.forwardRef(({ className, ...props }, ref) => (
 ))
 BreadcrumbItem.displayName = "BreadcrumbItem"
 
-const BreadcrumbLink = React.forwardRef(({ asChild, className, ...props }, ref) => {
-  const Comp = asChild ? Slot : "a"
-
-  return (
-    <Comp
-      ref={ref}
-      className={cn("transition-colors hover:text-foreground", className)}
-      {...props} />
-  );
+const BreadcrumbLink = React.forwardRef(({ render, className, ...props }, ref) => {
+  return useRender({
+    defaultTagName: "a",
+    render,
+    ref,
+    props: mergeProps({ className: cn("transition-colors hover:text-foreground", className) }, props),
+  });
 })
 BreadcrumbLink.displayName = "BreadcrumbLink"
 

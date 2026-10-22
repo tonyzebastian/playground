@@ -12,7 +12,7 @@ Modern Next.js showcase platform for UI components, animations, and interactive 
 ### Core
 - **Next.js 15.5.9** + React 18.3.1
 - **Tailwind CSS 3.4.1** - Utility-first styling
-- **Shadcn/ui** - Component library (Radix select, separator, slider, switch, tooltip only)
+- **shadcn/ui on Base UI** (`@base-ui/react`) - Component library. All UI primitives in `components/ui/` are built on Base UI, not Radix. Add new components the same way (`Select.Root`, `Tooltip.Popup`, ...); compose with `render={<el />}` instead of `asChild`. Animate open/close with `data-[starting-style]` / `data-[ending-style]` and a CSS transition
 - **Motion 12.22.0** - Animation library
 
 ### Icons & UI
