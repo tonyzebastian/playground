@@ -24,7 +24,7 @@ export default function GallerySheet({ item, onClose }) {
             role="dialog"
             aria-modal="true"
             aria-label={`${item.title} preview`}
-            className="absolute inset-x-0 bottom-0 top-3 flex flex-col overflow-hidden rounded-t-2xl bg-[#fafaf9] shadow-[0_-8px_30px_rgba(15,23,42,0.18)]"
+            className="absolute inset-x-0 bottom-0 top-3 flex flex-col overflow-hidden rounded-t-2xl bg-canvas shadow-[0_-8px_30px_rgba(15,23,42,0.18)]"
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}

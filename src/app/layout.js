@@ -71,9 +71,6 @@ export default function RootLayout({ children }) {
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              // Ensure light mode is set immediately (before React hydration)
-              document.documentElement.classList.remove('dark');
-
               // Pages shown inside the home split panel drop their own
               // breadcrumb header; the panel renders it instead.
               if (window.self !== window.top) document.documentElement.dataset.embed = '';

@@ -11,8 +11,8 @@ export default function CoinFlipPage() {
   return (
     <div className="flex items-center justify-center w-full h-screen relative dark bg-slate-950 overflow-hidden">
       <div className="text-center">
-        <h1 className="font-serif text-4xl dark:text-slate-200 text-slate-800 pb-2 tracking-wide">Welcome to Comet</h1>
-        <p className="dark:text-slate-500 text-slate-600 text-sm font-sans tracking-wider">Your download is starting automatically. Click below to retry manually.</p>
+        <h1 className="font-serif text-4xl text-slate-800 pb-2 tracking-wide">Welcome to Comet</h1>
+        <p className="text-slate-600 text-sm font-sans tracking-wider">Your download is starting automatically. Click below to retry manually.</p>
         <div className="pt-8">
           <Button size="lg" variant="secondary" className="font-sans tracking-wide cursor-pointer">
             <DownloadSimple weight="bold" className="w-4 h-4" />

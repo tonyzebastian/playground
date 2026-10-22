@@ -46,7 +46,7 @@ export default function DrawingToolbar({
   showSaveButton = true
 }) {
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 px-6 py-3 flex items-center gap-6">
+    <div className="bg-white rounded-xl shadow-lg border border-slate-200 px-6 py-3 flex items-center gap-6">
       {/* Left Section - Drawing Controls */}
       <div className="flex items-center gap-4">
         {/* Color Dropdown */}
@@ -84,18 +84,18 @@ export default function DrawingToolbar({
           max="20"
           value={strokeWidth}
           onChange={(e) => onStrokeWidthChange(parseInt(e.target.value))}
-          className="w-24 h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer"
+          className="w-24 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
           aria-label="Tip size"
           title={`Stroke width: ${strokeWidth}px`}
         />
-        <span className="text-sm text-slate-600 dark:text-slate-400">Tip</span>
+        <span className="text-sm text-slate-600">Tip</span>
       </div>
 
       <Separator orientation="vertical" className="h-8" />
 
       {/* Middle Section - View Controls */}
       <div className="flex items-center gap-4">
-        <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+        <label className="flex items-center gap-2 text-sm text-slate-600">
           <span>Image</span>
           <input
             type="range"
@@ -104,7 +104,7 @@ export default function DrawingToolbar({
             step="10"
             value={imageSize}
             onChange={(e) => onImageSizeChange(parseInt(e.target.value, 10))}
-            className="w-24 h-2 cursor-pointer appearance-none rounded-lg bg-slate-200 dark:bg-slate-700"
+            className="w-24 h-2 cursor-pointer appearance-none rounded-lg bg-slate-200"
             aria-label="Image size"
           />
         </label>
@@ -118,7 +118,7 @@ export default function DrawingToolbar({
           />
           <label
             htmlFor="toggle-images"
-            className="text-sm text-slate-600 dark:text-slate-400 cursor-pointer"
+            className="text-sm text-slate-600 cursor-pointer"
           >
             Image
           </label>
@@ -133,7 +133,7 @@ export default function DrawingToolbar({
           />
           <label
             htmlFor="toggle-grid"
-            className="text-sm text-slate-600 dark:text-slate-400 cursor-pointer"
+            className="text-sm text-slate-600 cursor-pointer"
           >
             Grid
           </label>

@@ -14,7 +14,7 @@ const embedSrc = (link) => (link.endsWith('.html') ? `${link}?embed=1` : link);
 // swallows the mouse events and the drag stalls.
 export default function GalleryPanel({ item, onClose, dragging }) {
   return (
-    <div className="flex h-full min-w-0 flex-col bg-[#fafaf9]">
+    <div className="flex h-full min-w-0 flex-col bg-canvas">
       <AppHeader
         title={item.title}
         titleOnly
