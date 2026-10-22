@@ -1,7 +1,21 @@
 'use client'
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 
+// The fanned-out layout spans about 640px. Scale it down on narrower viewports
+// (phones, the home split panel) rather than hiding the side images.
+const FULL_WIDTH = 640;
+
 export default function ImageReveal({ leftImage, middleImage, rightImage }) {
+    const [scale, setScale] = useState(1);
+
+    useEffect(() => {
+        const update = () => setScale(Math.min(1, window.innerWidth / FULL_WIDTH));
+        update();
+        window.addEventListener("resize", update);
+        return () => window.removeEventListener("resize", update);
+    }, []);
+
     const containerVariants = {
         initial: {
             opacity: 0,
@@ -88,6 +102,7 @@ export default function ImageReveal({ leftImage, middleImage, rightImage }) {
     };
 
     return (
+        <div style={{ transform: `scale(${scale})` }}>
         <motion.div 
             className="relative flex items-center justify-center w-64 h-64 my-12 "
             variants={containerVariants}
@@ -96,7 +111,7 @@ export default function ImageReveal({ leftImage, middleImage, rightImage }) {
         >
             {/* Left Image - Lowest z-index */}
             <motion.div
-                className="absolute w-48 h-48 origin-bottom-right overflow-hidden rounded-xl shadow-lg bg-white hidden md:block "
+                className="absolute w-48 h-48 origin-bottom-right overflow-hidden rounded-xl shadow-lg bg-white"
                 variants={leftImageVariants}
                 whileHover="hover"
                 animate="animate"
@@ -126,7 +141,7 @@ export default function ImageReveal({ leftImage, middleImage, rightImage }) {
 
             {/* Right Image - Highest z-index */}
             <motion.div
-                className="absolute w-48 h-48 origin-bottom-right overflow-hidden rounded-xl shadow-lg bg-white hidden md:block "
+                className="absolute w-48 h-48 origin-bottom-right overflow-hidden rounded-xl shadow-lg bg-white"
                 variants={rightImageVariants}
                 whileHover="hover"
                 animate="animate"
@@ -139,5 +154,6 @@ export default function ImageReveal({ leftImage, middleImage, rightImage }) {
                 />
             </motion.div>
         </motion.div>
+        </div>
     );
 }
