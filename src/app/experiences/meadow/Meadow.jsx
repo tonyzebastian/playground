@@ -226,6 +226,24 @@ vec3 applyFog(vec3 c, float d) {
   return mix(c, uFogColor, f);
 }`;
 
+const SHADOW_LIB = `
+uniform sampler2D uMask;      // top-down footprint of the rock
+uniform vec4 uMaskRect;
+uniform vec2 uSunXZ;          // horizontal direction toward the sun
+uniform float uShadowLen, uShadowAmt;
+// 0..1: how much of the rock's shadow (and contact darkening) falls on this ground point
+float rockShadow(vec2 xz) {
+  if (uShadowAmt <= 0.0) return 0.0;
+  float s = 0.0;
+  for (int i = 1; i <= 4; i++) {
+    vec2 q = xz + uSunXZ * uShadowLen * float(i) / 4.0;
+    s += texture(uMask, (q - uMaskRect.xy) / uMaskRect.zw).r;
+  }
+  float contact = smoothstep(0.08, 0.7, texture(uMask, (xz - uMaskRect.xy) / uMaskRect.zw).r);
+  return clamp(s / 4.0 * 0.8 + contact * 0.45, 0.0, 1.0) * uShadowAmt;
+}
+`;
+
 const GROUND_FRAG = `#version 300 es
 precision highp float;
 in vec3 vWorld;
@@ -238,6 +256,7 @@ uniform vec3 uMeadow;
 out vec4 outColor;
 ${NOISE}
 ${FOG}
+${SHADOW_LIB}
 void main() {
   vec2 uv = clamp((vWorld.xz - uRect.xy) / uRect.zw, 0.0, 1.0);
   vec3 w = texture(uWind, uv).rgb;
@@ -246,6 +265,7 @@ void main() {
   float streak = vnoise(vec2(dot(vWorld.xz, perp) * 1.6, dot(vWorld.xz, uDir) * 0.25));
   float mottle = clamp(w.r * 0.65, 0.0, 1.0);
   vec3 c = mix(uSoil * 0.75, uMeadow * 0.42, clamp(mottle + streak * 0.25 - 0.1, 0.0, 1.0));
+  c *= 1.0 - 0.7 * rockShadow(vWorld.xz);
   outColor = vec4(applyFog(c, d), 1.0);
 }`;
 
@@ -264,12 +284,15 @@ float rockH(vec2 p) {
   float d = (textureLod(uSdf, uv, 0.0).r - 0.5) * 2.0 * uDMax + uInflate;   // signed distance to the logo's edge (+ inside), grown by Inflate
   float nz = 0.65 * vnoise(p * uFreq + uSeed) + 0.35 * vnoise(p * uFreq * 2.1 + uSeed * 1.3) - 0.5;   // low-frequency wobble only
   d += nz * uNoise * 0.04;                                          // lumpy outline (absolute size, so it can't cut thin strokes apart)
+  d += (vnoise(p * uFreq * 9.0 + uSeed * 2.3) - 0.5) * uNoise * 0.012;   // small chips along the edge
   if (d <= 0.0) return 0.0;
   float x = clamp(d / uRb, 0.0, 1.0);
   float prof = 1.0 - pow(1.0 - x, 1.8);                              // rounded shoulder, finite slope at the edge
   float ridge = 1.0 - abs(2.0 * vnoise(p * uFreq * 2.6 + uSeed * 1.7) - 1.0);
   float h = uT * prof;
   h += uT * uRough * ((vnoise(p * uFreq * 3.0 + uSeed * 0.5) - 0.5) * 0.12 + (ridge - 0.5) * 0.08) * smoothstep(0.0, 0.3, prof);
+  float cr = abs(vnoise(p * uFreq * 1.7 + uSeed * 3.1) - 0.5);
+  h -= uT * 0.05 * (1.0 - smoothstep(0.0, 0.025, cr)) * smoothstep(0.15, 0.5, prof);   // carved cracks
   return max(h, 0.0);
 }
 `;
@@ -296,38 +319,85 @@ precision highp float;
 in vec2 vP;
 in vec3 vWorld;
 uniform mat4 uModel;
-uniform vec3 uCamera, uSun, uSunColor, uSky, uStone, uMoss;
-uniform float uBright, uMossAmt, uAmbient, uSunlight;
+uniform vec3 uCamera, uSun, uSunColor, uSky, uStone, uMoss, uSunObj;
+uniform float uBright, uMossAmt, uAmbient, uSunlight, uDetail, uLichen, uShadow;
+uniform sampler2D uStoneTex;     // optional uploaded stone texture
+uniform float uHasTex, uTexScale, uTexAmt, uTexBump;
 out vec4 outColor;
 ${NOISE}
 ${ROCK_LIB}
 ${FOG}
+// two samples at different scales and angles, blended by a noise mask, so the texture's tiling never shows
+vec3 stoneTex(vec2 p) {
+  vec2 a = p * uTexScale;
+  vec2 b = mat2(0.8, -0.6, 0.6, 0.8) * p * uTexScale * 0.43 + 0.37;
+  return mix(texture(uStoneTex, a).rgb, texture(uStoneTex, b).rgb, smoothstep(0.3, 0.7, vnoise(p * 3.0 + 4.0)));
+}
+// fine relief from the slope of a noise field (reads as surface bumps, not colour)
+vec2 bumpAt(vec2 q) {
+  float b0 = vnoise(q);
+  return vec2(vnoise(q + vec2(0.7, 0.0)) - b0, vnoise(q + vec2(0.0, 0.7)) - b0);
+}
 void main() {
   float h = rockH(vP);
   if (h <= 0.0004) discard;                                            // outside the rock
   const float e = 0.004;
   float hx = rockH(vP + vec2(e, 0.0)), hz = rockH(vP + vec2(0.0, e));
   vec3 nObj = normalize(vec3(-(hx - h) / e, 1.0, -(hz - h) / e));
-  vec2 bump = vec2(vnoise(vP * 140.0 + 3.0), vnoise(vP * 140.0 + 17.0)) - 0.5;
-  nObj = normalize(nObj + vec3(bump.x, 0.0, bump.y) * 0.22 * uRough);  // fine grit
+  vec2 g = bumpAt(vP * 55.0) + 0.55 * bumpAt(vP * 140.0 + 5.0);        // two octaves of grit and pitting
+  nObj = normalize(nObj + vec3(g.x, 0.0, g.y) * 0.5 * uRough * uDetail);
+  vec3 tcol = vec3(0.0);
+  if (uHasTex > 0.5) {
+    tcol = stoneTex(vP);
+    float l0 = dot(tcol, vec3(0.333));                                  // the texture's own relief, from its brightness
+    float lx = dot(stoneTex(vP + vec2(0.003, 0.0)), vec3(0.333)), lz = dot(stoneTex(vP + vec2(0.0, 0.003)), vec3(0.333));
+    nObj = normalize(nObj + vec3(-(lx - l0), 0.0, -(lz - l0)) * 8.0 * uTexBump);
+  }
   vec3 N = normalize(mat3(uModel) * nObj);
 
-  // stone: broad tonal patches, fine grain, dark crack lines
-  float coarse = fbm(vP * 9.0 + 5.0);
-  float fine = vnoise(vP * 70.0);
-  vec3 stone = mix(uStone * 0.74, uStone * 1.2, coarse) * (0.9 + 0.2 * fine);
-  float crack = smoothstep(0.9, 1.0, 1.0 - abs(2.0 * vnoise(vP * 22.0 + 9.0) - 1.0));
-  stone *= 1.0 - 0.38 * crack;
+  // ---- albedo: warm/cool tonal patches, rain streaks, granite flecks, pores, cracks ----
+  float coarse = fbm(vP * 8.0 + 5.0);
+  vec3 stone = mix(uStone * vec3(0.72, 0.7, 0.7), uStone * vec3(1.2, 1.16, 1.08), coarse);
+  if (uHasTex > 0.5) stone = mix(stone, tcol * 1.05 * (0.92 + 0.16 * coarse), uTexAmt);
+  float streak = vnoise(vec2(vP.x * 36.0, vP.y * 4.0) + 2.0);          // stretched noise: staining that runs along one axis
+  stone *= 1.0 - 0.2 * smoothstep(0.55, 0.9, streak) * uDetail;
+  float fleck = vnoise(vP * 210.0);
+  stone *= 1.0 + 0.24 * (smoothstep(0.72, 0.86, fleck) - smoothstep(0.3, 0.14, fleck)) * uDetail;
+  float pore = smoothstep(0.78, 0.9, vnoise(vP * 120.0 + 9.0));
+  stone *= 1.0 - 0.3 * pore * uDetail;
+  float crack = 1.0 - smoothstep(0.0, 0.03, abs(vnoise(vP * uFreq * 1.7 + uSeed * 3.1) - 0.5));
+  stone *= 1.0 - 0.5 * crack;
 
-  // moss collects on upward-facing, lower parts, in patches
+  // lichen: small pale round patches on upward-facing stone
+  float lb = vnoise(vP * 34.0 + 7.0) * vnoise(vP * 53.0 + 3.0);
+  float lich = smoothstep(0.34, 0.4, lb) * smoothstep(0.45, 0.9, N.y) * uLichen;
+  vec3 lichCol = mix(vec3(0.74, 0.76, 0.52), vec3(0.84, 0.82, 0.72), vnoise(vP * 90.0));
+  // moss gathers on the up-facing, lower parts, and in cracks
   float up = smoothstep(0.5, 0.9, N.y);
   float patchy = fbm(vP * 6.0 + 11.0);
-  float moss = uMossAmt * up * smoothstep(0.4, 0.62, patchy + (1.0 - h / uT) * 0.22);
-  vec3 c = mix(stone, uMoss * (0.8 + 0.4 * fine), moss);
+  float moss = clamp(uMossAmt * up * smoothstep(0.4, 0.62, patchy + (1.0 - h / uT) * 0.22) + crack * 0.35 * uMossAmt, 0.0, 1.0);
+  vec3 c = mix(stone, lichCol, lich);
+  c = mix(c, uMoss * (0.8 + 0.4 * vnoise(vP * 70.0)), moss);
+  // dirt where the stone meets the ground
+  float low = 1.0 - smoothstep(0.0, 0.3, h / uT);
+  c = mix(c, vec3(0.2, 0.17, 0.12), low * 0.5);
 
-  float ao = mix(0.42, 1.0, smoothstep(0.0, 0.3, h / uT));             // darker where the stone meets the ground
-  vec3 ambient = mix(vec3(0.4, 0.37, 0.3), mix(uSky, vec3(0.55, 0.52, 0.45), 0.55), N.y * 0.5 + 0.5) * uAmbient;   // warm bounce, little blue
-  c *= (ambient + uSunColor * max(dot(N, uSun), 0.0) * uSunlight * 0.9) * ao * uBright;
+  // ---- light: cavity darkening, self-shadowing and a stronger sun ----
+  float avg = 0.25 * (rockH(vP + vec2(0.012, 0.0)) + rockH(vP - vec2(0.012, 0.0)) + rockH(vP + vec2(0.0, 0.012)) + rockH(vP - vec2(0.0, 0.012)));
+  float cav = clamp((h - avg) * 45.0, -1.0, 1.0);                      // negative in hollows
+  float ao = mix(0.5, 1.0, smoothstep(0.0, 0.3, h / uT)) * (1.0 + 0.55 * min(cav, 0.0));
+  float sh = 1.0;
+  float Llen = length(uSunObj.xz) + 1e-4;
+  vec2 Lh = uSunObj.xz / Llen;
+  float slope = uSunObj.y / Llen;
+  for (int i = 1; i <= 8; i++) {                                        // march toward the sun across the height field
+    float t = float(i) * 0.014;
+    sh = min(sh, 1.0 - smoothstep(0.0, 0.02, rockH(vP + Lh * t) - (h + t * slope)));
+  }
+  sh = mix(1.0, sh, uShadow);
+  vec3 ambient = mix(vec3(0.34, 0.31, 0.26), mix(uSky, vec3(0.55, 0.52, 0.45), 0.55), N.y * 0.5 + 0.5) * uAmbient * 1.35;
+  float diff = max(dot(N, uSun), 0.0) * sh;
+  c *= (ambient + uSunColor * diff * uSunlight * 1.05) * ao * uBright;
   outColor = vec4(applyFog(c, distance(uCamera, vWorld)), 1.0);
 }`;
 
@@ -436,8 +506,10 @@ in float vGust;
 in float vTone;
 in float vDry;
 uniform vec3 uCamera;
+uniform vec3 uThin;      // same uniform as the vertex shader: where thinning starts/ends
 uniform vec3 uMeadow, uFresh, uCool, uStraw, uTipColor, uDryTip, uSoil;
 uniform float uSat, uBright, uToneVar, uPatch, uPatchSize, uDryStrength, uDryTips, uLaneBright;
+${SHADOW_LIB}
 uniform vec3 uSun, uSunColor, uSky, uBackColor;
 uniform float uSunlight, uAmbient, uBacklight, uSheen, uCanopy, uRoot, uCrease, uUnderside;
 out vec4 outColor;
@@ -463,7 +535,7 @@ void main() {
   float luma = dot(base, vec3(0.299, 0.587, 0.114));
   base = mix(vec3(luma), base, uSat) * uBright;
 
-  float farFade = smoothstep(25.0, 55.0, distance(uCamera, vWorld));   // no root darkening far away: it only shimmers
+  float farFade = smoothstep(uThin.x * 1.4, uThin.y * 1.2, distance(uCamera, vWorld));   // no root darkening far away: it only shimmers
   vec3 tip = mix(base * 1.2, uTipColor, 0.25);
   vec3 c = mix(uSoil, base, mix(smoothstep(0.0, 0.45, vT), 1.0, farFade * 0.7));
   c = mix(c, tip, smoothstep(0.35, 1.0, vT) * (0.15 + vGust * 0.85));
@@ -479,6 +551,7 @@ void main() {
   c += uBackColor * glow * (0.20 + vT * 0.55) * (0.5 + vGust * 0.5) * ao * uBacklight;   // sun glowing through the blade
   c += vec3(0.85, 0.92, 0.70) * sheen * uSheen * smoothstep(0.2, 1.0, vT);
   c *= mix(0.8, 1.0, abs(vSide));                          // darker midrib, lighter edges
+  c *= 1.0 - 0.6 * rockShadow(vWorld.xz) * mix(1.0, 0.55, vT);   // the rock's shadow, deeper low in the grass
   outColor = vec4(applyFog(c, distance(uCamera, vWorld)), 1.0);
 }`;
 
@@ -1117,10 +1190,11 @@ function distanceInside(inside, w, h) {
   return f;
 }
 
-async function loadRock(gl, url = "/models/logo/logo.png") {
+async function loadRock(gl, url = "/models/logo/logo.png", invert = false) {
   const img = await loadImage(url);
-  const long = Math.max(img.width, img.height);
-  const iw = img.width / long, ih = img.height / long;            // logo size in logo units (long side = 1)
+  const srcW = img.naturalWidth || 512, srcH = img.naturalHeight || 512;   // SVGs without a size report 0
+  const long = Math.max(srcW, srcH);
+  const iw = srcW / long, ih = srcH / long;                         // logo size in logo units (long side = 1)
   const ew = iw + 2 * ROCK_PAD, eh = ih + 2 * ROCK_PAD;           // padded rectangle
   const cw = Math.round(ROCK_WORK * (ew / Math.max(ew, eh))), ch = Math.round(ROCK_WORK * (eh / Math.max(ew, eh)));
   const ppu = cw / ew;                                             // pixels per logo unit
@@ -1133,11 +1207,23 @@ async function loadRock(gl, url = "/models/logo/logo.png") {
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(img, cw / 2 - (iw / 2) * ppu, ch / 2 - (ih / 2) * ppu, iw * ppu, ih * ppu);
   const px = ctx.getImageData(0, 0, cw, ch).data;
+  // the image's own rectangle inside the padded canvas; everything outside it is empty padding
+  const x0 = Math.max(0, Math.round(cw / 2 - (iw / 2) * ppu)), x1 = Math.min(cw - 1, Math.round(cw / 2 + (iw / 2) * ppu) - 1);
+  const y0 = Math.max(0, Math.round(ch / 2 - (ih / 2) * ppu)), y1 = Math.min(ch - 1, Math.round(ch / 2 + (ih / 2) * ppu) - 1);
+  const luma = (i) => (px[i * 4] * 0.3 + px[i * 4 + 1] * 0.59 + px[i * 4 + 2] * 0.11) / 255;
   let anyAlpha = false;
-  for (let i = 3; i < px.length; i += 4) if (px[i] < 250) { anyAlpha = true; break; }
+  for (let y = y0 + 2; y <= y1 - 2 && !anyAlpha; y++) for (let x = x0 + 2; x <= x1 - 2; x++) if (px[(y * cw + x) * 4 + 3] < 250) { anyAlpha = true; break; }
+  // Without transparency the background is whatever the image corners are: a dark logo on light paper (the usual
+  // case) or a light logo on a dark ground. Detect which, so either works; `invert` flips it if that guess is wrong.
+  const cornerLuma = [[x0 + 2, y0 + 2], [x1 - 2, y0 + 2], [x0 + 2, y1 - 2], [x1 - 2, y1 - 2]].reduce((acc, [x, y]) => acc + luma(y * cw + x), 0) / 4;
+  const darkGround = cornerLuma < 0.45;
   const cover = new Float32Array(cw * ch);                          // how much of each pixel is the logo
-  for (let i = 0; i < cover.length; i++) {
-    cover[i] = anyAlpha ? px[i * 4 + 3] / 255 : 1 - (px[i * 4] * 0.3 + px[i * 4 + 1] * 0.59 + px[i * 4 + 2] * 0.11) / 255;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const i = y * cw + x;
+      const v = anyAlpha ? px[i * 4 + 3] / 255 : darkGround ? luma(i) : 1 - luma(i);
+      cover[i] = invert ? 1 - v : v;
+    }
   }
   boxBlur(cover, cw, ch, 3, 2);                                     // smooths the pixel staircase of a 76px source
   const inside = new Uint8Array(cw * ch);
@@ -1245,7 +1331,7 @@ function buildRockMask(gl, tex, rock, ch) {
 
 // ---- component --------------------------------------------------------------
 
-const Meadow = forwardRef(function Meadow({ values }, ref) {
+const Meadow = forwardRef(function Meadow({ values, logoUrl, stoneUrl, onNotice }, ref) {
   const canvasRef = useRef(null);
   const valuesRef = useRef(values);
   const apiRef = useRef(null);
@@ -1254,6 +1340,8 @@ const Meadow = forwardRef(function Meadow({ values }, ref) {
   const [failed, setFailed] = useState(false);
 
   valuesRef.current = values;
+  const noticeRef = useRef(onNotice);
+  noticeRef.current = onNotice;
   const baked = bakedKey(values);
 
   useImperativeHandle(ref, () => ({
@@ -1316,15 +1404,56 @@ const Meadow = forwardRef(function Meadow({ values }, ref) {
     let maskRect = [0, 0, 1, 1];
     let maskKey = "";
     let maskTimer = 0;
-    loadRock(gl)
-      .then((r) => {
-        if (disposed) destroyRock(gl, r);
-        else rock = r;
-      })
-      .catch((err) => console.error("rock failed to build", err));
+
+    // Optional uploaded stone texture (unit 3 when drawing the rock).
+    const stoneTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, stoneTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([160, 154, 142, 255]));
+    let hasStone = false;
+    let rockToken = 0;
+    let stoneToken = 0;
 
     // Plants the blades for the current camera and growth settings.
     apiRef.current = {
+      // Builds a new rock from an image (any logo: transparent PNG, dark-on-light, light-on-dark, SVG).
+      async setLogo(url, invert) {
+        const token = ++rockToken;
+        try {
+          const r = await loadRock(gl, url, invert);
+          if (disposed || token !== rockToken) { destroyRock(gl, r); return; }
+          const old = rock;
+          rock = r;
+          maskKey = "";
+          maskRect = [0, 0, 1, 1];            // rebuild the grass footprint straight away
+          if (old) destroyRock(gl, old);
+        } catch (err) {
+          console.error("rock failed to build", err);
+          if (token === rockToken) noticeRef.current?.("Couldn't read that image");
+        }
+      },
+      // Wraps the rock in an uploaded stone texture (null removes it).
+      async setStone(url) {
+        const token = ++stoneToken;
+        if (!url) { hasStone = false; return; }
+        try {
+          const img = await loadImage(url);
+          if (disposed || token !== stoneToken) return;
+          gl.bindTexture(gl.TEXTURE_2D, stoneTex);
+          gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, img);
+          gl.generateMipmap(gl.TEXTURE_2D);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+          const aniso = gl.getExtension("EXT_texture_filter_anisotropic");
+          if (aniso) gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT, 8);
+          hasStone = true;
+        } catch (err) {
+          console.error("stone texture failed to load", err);
+          if (token === stoneToken) noticeRef.current?.("Couldn't read that texture");
+        }
+      },
       rebuild(v) {
         const { camera: c, growth: g } = v;
         const aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight) || 1;
@@ -1493,6 +1622,16 @@ const Meadow = forwardRef(function Meadow({ values }, ref) {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, windTarget.tex);
 
+      // The rock casts a shadow onto the ground and grass: direction toward the sun, and how far it reaches.
+      const rk = v.rock;
+      const sAz = rad(li.sunAzimuth), sEl = rad(li.sunElevation);
+      const sunDir = [Math.cos(sEl) * Math.sin(sAz), Math.sin(sEl), -Math.cos(sEl) * Math.cos(sAz)];
+      const sunHLen = Math.hypot(sunDir[0], sunDir[2]) || 1;
+      const sunXZ = [sunDir[0] / sunHLen, sunDir[2] / sunHLen];
+      const shadowOn = !!(rock && rk && rk.show && rk.shadow > 0.01);
+      const shadowLen = (rk ? rk.thickness * rk.scale : 0) * (sunHLen / Math.max(sunDir[1], 0.15));
+      const shadowAmt = shadowOn ? rk.shadow : 0;
+
       // 2. ground under the blades
       qBegin("ground + character");
       gl.useProgram(progs.ground);
@@ -1501,6 +1640,14 @@ const Meadow = forwardRef(function Meadow({ values }, ref) {
       gl.uniform1i(progs.ground.u("uWind"), 0);
       gl.uniform3fv(progs.ground.u("uCamera"), eye);
       gl.uniform2fv(progs.ground.u("uDir"), windDir);
+      gl.activeTexture(gl.TEXTURE5);
+      gl.bindTexture(gl.TEXTURE_2D, maskTex);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.uniform1i(progs.ground.u("uMask"), 5);
+      gl.uniform4fv(progs.ground.u("uMaskRect"), maskRect);
+      gl.uniform2fv(progs.ground.u("uSunXZ"), sunXZ);
+      f1(progs.ground, "uShadowLen", shadowLen);
+      f1(progs.ground, "uShadowAmt", shadowAmt);
       f3(progs.ground, "uSoil", hex(co.soil));
       f3(progs.ground, "uMeadow", hex(co.meadow));
       f1(progs.ground, "uFog", at.haze);
@@ -1528,6 +1675,13 @@ const Meadow = forwardRef(function Meadow({ values }, ref) {
         gl.activeTexture(gl.TEXTURE2);
         gl.bindTexture(gl.TEXTURE_2D, rock.sdf);
         gl.uniform1i(C.u("uSdf"), 2);
+        gl.activeTexture(gl.TEXTURE3);
+        gl.bindTexture(gl.TEXTURE_2D, stoneTex);
+        gl.uniform1i(C.u("uStoneTex"), 3);
+        f1(C, "uHasTex", hasStone ? 1 : 0);
+        f1(C, "uTexScale", ch.textureScale);
+        f1(C, "uTexAmt", ch.textureAmount);
+        f1(C, "uTexBump", ch.textureRelief);
         gl.uniform2fv(C.u("uExtent"), rock.extent);
         f1(C, "uDMax", ROCK_DMAX);
         f1(C, "uT", ch.thickness);
@@ -1538,7 +1692,12 @@ const Meadow = forwardRef(function Meadow({ values }, ref) {
         f1(C, "uSeed", ch.seed);
         f1(C, "uInflate", ch.inflate);
         gl.uniform3fv(C.u("uCamera"), eye);
-        f3(C, "uSun", [Math.cos(rad(li.sunElevation)) * Math.sin(rad(li.sunAzimuth)), Math.sin(rad(li.sunElevation)), -Math.cos(rad(li.sunElevation)) * Math.cos(rad(li.sunAzimuth))]);
+        f3(C, "uSun", sunDir);
+        const yawR = rad(ch.rotation);
+        f3(C, "uSunObj", [Math.cos(yawR) * sunDir[0] - Math.sin(yawR) * sunDir[2], sunDir[1], Math.sin(yawR) * sunDir[0] + Math.cos(yawR) * sunDir[2]]);
+        f1(C, "uDetail", ch.detail);
+        f1(C, "uLichen", ch.lichen);
+        f1(C, "uShadow", ch.shadow);
         f3(C, "uSunColor", hex(li.sunColor));
         f3(C, "uSky", hex(li.skyColor));
         f3(C, "uStone", hex(ch.stone));
@@ -1546,7 +1705,7 @@ const Meadow = forwardRef(function Meadow({ values }, ref) {
         f1(C, "uMossAmt", ch.moss);
         f1(C, "uBright", ch.brightness);
         f1(C, "uAmbient", ch.ambient);
-        f1(C, "uSunlight", li.sunlight * 1.25);
+        f1(C, "uSunlight", li.sunlight * 1.3);
         f1(C, "uFog", at.haze);
         f3(C, "uFogColor", fogRgb);
         gl.bindVertexArray(rock.vao);
@@ -1575,6 +1734,9 @@ const Meadow = forwardRef(function Meadow({ values }, ref) {
       f1(B, "uBaseBend", wd.baseBend);
       f1(B, "uGustBend", wd.gustBend);
       f1(B, "uFlutter", wd.flutter);
+      gl.uniform2fv(B.u("uSunXZ"), sunXZ);
+      f1(B, "uShadowLen", shadowLen);
+      f1(B, "uShadowAmt", shadowAmt);
       gl.activeTexture(gl.TEXTURE5);
       gl.bindTexture(gl.TEXTURE_2D, maskTex);
       gl.uniform1i(B.u("uMask"), 5);
@@ -1789,6 +1951,7 @@ const Meadow = forwardRef(function Meadow({ values }, ref) {
       particles.bufs.forEach((b) => gl.deleteBuffer(b));
       gl.deleteVertexArray(particles.vao);
       if (rock) destroyRock(gl, rock);
+      gl.deleteTexture(stoneTex);
       gl.deleteTexture(maskTex);
       apiRef.current = null;
       cancelAnimationFrame(raf);
@@ -1805,6 +1968,16 @@ const Meadow = forwardRef(function Meadow({ values }, ref) {
       Object.values(progs).forEach((p) => gl.deleteProgram(p));
     };
   }, []);
+
+  // Build the rock from the current logo (and rebuild if Invert flips).
+  const invertLogo = !!values.rock.invertLogo;
+  useEffect(() => {
+    apiRef.current?.setLogo(logoUrl, invertLogo);
+  }, [logoUrl, invertLogo]);
+
+  useEffect(() => {
+    apiRef.current?.setStone(stoneUrl);
+  }, [stoneUrl]);
 
   // Re-plant the blades when a control that changes where they grow moves (debounced).
   useEffect(() => {

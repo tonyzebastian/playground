@@ -2,6 +2,8 @@
 // Controls under `growth` and `camera` change where blades are planted, so the field
 // is rebuilt (after a short pause) when they move; everything else is a live uniform.
 
+export const DEFAULT_LOGO = '/models/logo/logo.png';
+
 export const MEADOW_ASPECTS = {
   portrait: 5 / 7,
   landscape: 7 / 5,
@@ -16,7 +18,7 @@ export const MEADOW_CONFIG = {
         { value: 'portrait', label: 'Portrait · 5:7' },
         { value: 'landscape', label: 'Landscape · 7:5' },
       ],
-      default: 'portrait',
+      default: 'landscape',
     },
     pixelRatio: [1.5, 1, 3, 0.25],
     antialiasing: {
@@ -34,10 +36,18 @@ export const MEADOW_CONFIG = {
   rock: {
     _collapsed: false,
     show: true,
+    uploadLogo: { type: 'action', label: 'Upload logo…' },
+    resetLogo: { type: 'action', label: 'Use default logo' },
+    invertLogo: false,
+    uploadTexture: { type: 'action', label: 'Upload stone texture…' },
+    removeTexture: { type: 'action', label: 'Remove texture' },
+    textureAmount: [1, 0, 1, 0.01],
+    textureScale: [6, 0.5, 30, 0.1],
+    textureRelief: [0.6, 0, 2, 0.05],
     x: [0, -14, 14, 0.1],
     z: [-1, -16, 10, 0.1],
     rotation: [0, -180, 180, 1],
-    scale: [11, 2, 18, 0.05],
+    scale: [15, 2, 24, 0.05],
     lift: [-0.12, -1.5, 1.5, 0.01],
     inflate: [0.03, -0.03, 0.08, 0.001],
     thickness: [0.24, 0.04, 0.7, 0.005],
@@ -47,6 +57,9 @@ export const MEADOW_CONFIG = {
     roughness: [1.3, 0, 2.5, 0.05],
     seed: [3, 0, 100, 1],
     stone: '#a79f8f',
+    detail: [1, 0, 2, 0.05],
+    lichen: [0.35, 0, 1, 0.01],
+    shadow: [0.65, 0, 1, 0.01],
     moss: [0.25, 0, 1, 0.01],
     mossColor: '#768a52',
     brightness: [1.1, 0.3, 3, 0.01],
@@ -77,8 +90,8 @@ export const MEADOW_CONFIG = {
     size: [0.85, 0.4, 3, 0.05],
   },
   camera: {
-    height: [14, 3, 40, 0.5],
-    distance: [12, 2, 40, 0.5],
+    height: [20, 3, 40, 0.5],
+    distance: [5, 2, 40, 0.5],
     lookAhead: [-1, -30, 12, 0.5],
     fov: [56, 25, 95, 1],
     roll: [2, -25, 25, 0.5],
@@ -161,8 +174,8 @@ export const MEADOW_CONFIG = {
     _collapsed: true,
     haze: [0.38, 0, 1, 0.01],
     hazeColor: '#8cb899',
-    thinStart: [18, 5, 60, 1],
-    thinEnd: [45, 15, 100, 1],
+    thinStart: [30, 5, 80, 1],
+    thinEnd: [65, 15, 140, 1],
     thinKeep: [0.35, 0.05, 1, 0.01],
   },
   post: {
@@ -173,8 +186,8 @@ export const MEADOW_CONFIG = {
     grain: [0.035, 0, 0.15, 0.005],
   },
   paint: {
-    _collapsed: false,
-    amount: [0.85, 0, 1, 0.01],
+    _collapsed: true,
+    amount: [0, 0, 1, 0.01],   // off by default: it didn't add much and costs GPU time when on
     radius: [3, 1, 8, 0.25],
     sharpness: [8, 1, 16, 0.5],
     anisotropy: [1, 0.2, 3, 0.05],
