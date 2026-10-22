@@ -22,6 +22,7 @@ export default function GallerySheet({ item, onClose }) {
           <div className="absolute inset-0 bg-slate-950/40" onClick={onClose} />
           <motion.aside
             role="dialog"
+            aria-modal="true"
             aria-label={`${item.title} preview`}
             className="absolute inset-x-0 bottom-0 top-3 flex flex-col overflow-hidden rounded-t-2xl bg-[#fafaf9] shadow-[0_-8px_30px_rgba(15,23,42,0.18)]"
             initial={{ y: '100%' }}

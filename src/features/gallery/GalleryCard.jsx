@@ -1,10 +1,13 @@
 'use client';
 
+import { memo } from 'react';
 import { motion } from 'motion/react';
 import { ArrowUpRight } from '@phosphor-icons/react';
 import GalleryContent from './GalleryContent';
 
-export default function GalleryCard({ card, onOpen, active = false }) {
+// Memoised: the grid re-renders on every pointer move while the panel divider
+// is dragged, but a card only changes when its own `active` flag flips.
+function GalleryCard({ card, onOpen, active = false }) {
   const previewStyle = {
     aspectRatio: `${card.size.width} / ${card.size.height}`,
     backgroundColor: card.backgroundColor,
@@ -59,3 +62,5 @@ function Preview({ card }) {
     </>
   );
 }
+
+export default memo(GalleryCard);

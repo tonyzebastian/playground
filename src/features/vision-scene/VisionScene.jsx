@@ -24,7 +24,8 @@ export function VisionScene({ className }) {
     const [logoOpacity, setLogoOpacity] = useState(0);
     const [sceneOpacity, setSceneOpacity] = useState(1);
     const [mounted, setMounted] = useState(false);
-    const isDesktop = useMatchMedia("(min-width: 1024px)");
+    // Input capability rather than width, so it still runs inside the home split panel.
+    const hasFinePointer = useMatchMedia("(hover: hover) and (pointer: fine)");
     const reduced = useMatchMedia("(prefers-reduced-motion: reduce)");
     const inView = useInView(containerRef, { amount: 0.3, once: false });
     const webglSupported = useMemo(() => {
@@ -38,7 +39,7 @@ export function VisionScene({ className }) {
             return false;
         }
     }, []);
-    const shouldMountCanvas = mounted && isDesktop && webglSupported;
+    const shouldMountCanvas = mounted && hasFinePointer && webglSupported;
     useEffect(() => {
         setMounted(true);
     }, []);
