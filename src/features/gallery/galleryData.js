@@ -29,6 +29,7 @@ const galleryCatalog = [
     content: '/thumbnails/evening_window.mp4',
     title: 'Evening Window, July 2026',
     size: { width: 280, height: 200 },
+    zoom: 1.32, // the render has white margins baked in; crop them out
     link: '/feelings/window-01',
   }),
   componentCard('flock', 'Flock', {

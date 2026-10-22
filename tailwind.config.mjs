@@ -9,7 +9,7 @@ const config = {
   theme: {
   	extend: {
 		fontFamily: {
-			sans: ['var(--font-raleway)'], // Default font
+			sans: ['var(--font-raleway)', 'Arial', 'Helvetica', 'sans-serif'], // Default font
 			heading: ['var(--font-merriweather)'], // Custom font for headings
 		  },
   		colors: {

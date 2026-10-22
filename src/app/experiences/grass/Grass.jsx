@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createFrameLoop } from "@/lib/frame-loop";
 
 // Instanced-blade grass in raw WebGL2. Every blade is the same 8-segment
 // triangle strip; per-instance attributes place it on a height field, shape it
@@ -338,16 +339,9 @@ export default function Grass() {
     };
     canvas.addEventListener("pointermove", onMove);
 
-    let raf = 0;
-    let visible = true;
     let time = 0;
-    let last = performance.now();
 
-    const frame = (now) => {
-      raf = 0;
-      if (!visible || document.hidden) return;
-      const dt = Math.min(Math.max((now - last) / 1000, 0), 0.05);
-      last = now;
+    const frame = (dt) => {
       const p = params.current;
       time += dt * (0.5 + p.wind * 0.6);
 
@@ -385,27 +379,12 @@ export default function Grass() {
         gl.bindVertexArray(layer.vao);
         gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, layer.vertices, layer.count);
       }
-      raf = requestAnimationFrame(frame);
     };
 
-    const start = () => {
-      if (!raf && visible && !document.hidden) {
-        last = performance.now();
-        raf = requestAnimationFrame(frame);
-      }
-    };
-    const observer = new IntersectionObserver(([entry]) => {
-      visible = entry.isIntersecting;
-      if (visible) start();
-    });
-    observer.observe(canvas);
-    document.addEventListener("visibilitychange", start);
-    start();
+    const stopLoop = createFrameLoop(canvas, frame);
 
     return () => {
-      cancelAnimationFrame(raf);
-      observer.disconnect();
-      document.removeEventListener("visibilitychange", start);
+      stopLoop();
       canvas.removeEventListener("pointermove", onMove);
       [tall, carpet].forEach((l) => {
         gl.deleteBuffer(l.bladeBuf);

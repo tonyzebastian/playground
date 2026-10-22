@@ -12,12 +12,11 @@ Modern Next.js showcase platform for UI components, animations, and interactive 
 ### Core
 - **Next.js 15.5.9** + React 18.3.1
 - **Tailwind CSS 3.4.1** - Utility-first styling
-- **Shadcn/ui** - Component library (Radix UI primitives)
+- **Shadcn/ui** - Component library (Radix select, separator, slider, switch, tooltip only)
 - **Motion 12.22.0** - Animation library
 
 ### Icons & UI
-- **Lucide React** - Primary icon library
-- **React Icons** - Secondary icons (FontAwesome, Ionicons, etc.)
+- **Phosphor** (`@phosphor-icons/react`) - The only icon library. Use `weight="bold"`; import from `@phosphor-icons/react/ssr` in files without `"use client"`
 
 ### Deployment & Hosting
 - **Cloudflare Pages** - Static hosting with global CDN
@@ -99,8 +98,7 @@ src/
 │   ├── pond-lab/
 │   ├── vision-reveal/
 │   └── vision-scene/
-├── hooks/
-└── lib/                          # Shared framework-agnostic utilities
+└── lib/                          # Shared utilities (cn, frame-loop)
 ```
 
 ---
@@ -113,9 +111,9 @@ src/
 - **Loading**: `display: 'swap'` for optimal performance
 
 ### Theme
-- **Colors**: Slate palette
-- **Mode**: Light/Dark via CSS variables
-- **Implementation**: `useTheme` hook with localStorage persistence
+- **Colors**: Tailwind slate palette; light only (there is no dark theme)
+- **Tokens**: CSS variables in `app/globals.css` (`--canvas` is the page background behind cards and panels), exposed as Tailwind colors (`bg-canvas`). CSS modules take neutrals from the Tailwind palette with `theme('colors.slate.500')`, not hex
+- **Body font**: Raleway via `font-sans` on `body`
 
 ### Layout
 - **Canvas**: 60%-120% responsive scaling (1440px base)
@@ -188,14 +186,18 @@ Single component with variants:
 <UIGlowLogo variant="mini" /> // Mini icon
 ```
 
-### Theme Hook (`hooks/useTheme.jsx`)
-Reusable theme management:
+### Frame Loop (`lib/frame-loop.js`)
+Shared render loop for canvas experiments:
 ```javascript
-const { isDark, toggleTheme } = useTheme();
+const stop = createFrameLoop(canvas, (dt) => { /* draw */ });
 ```
-- SSR-safe (checks `typeof window`)
-- localStorage persistence
-- System preference detection
+- Pauses while off-screen or the tab is hidden; `dt` is clamped seconds
+- Used by Grass; new experiments should use it instead of hand-rolling rAF + IntersectionObserver
+
+### Split Panel (`features/gallery/`)
+- Every gallery card opens in a resizable right panel (`GalleryPanel`); below 900px it is a bottom sheet (`GallerySheet`)
+- Pages render inside an iframe. Pages in an iframe get `data-embed` on `<html>`, which hides `AppHeader` (the panel shows the name instead). Gate features on input capability (`hover: hover`), never on viewport width, because media queries inside the iframe see the panel's width
+- Expand opens the page in a new tab with the full breadcrumb
 
 ### Gallery Data (`features/gallery/galleryData.js`)
 The home gallery keeps its presentation data separate from its layout:
@@ -282,7 +284,6 @@ Shows user-friendly error UI with reload button (dev mode shows error details).
 4. Tools don't need navigation config (standalone)
 
 ### Modify Theme
-- Edit `hooks/useTheme.jsx` for logic
 - CSS variables in `app/globals.css`
 - Tailwind config in `tailwind.config.mjs`
 
@@ -323,8 +324,7 @@ npm run lint   # ESLint check
 - Attributes: autoplay, muted, loop, playsInline
 
 ### Icons
-- **Primary**: Lucide React (consistent design system)
-- **Secondary**: React Icons (when Lucide doesn't have it)
+- **Library**: Phosphor, `weight="bold"`
 - **Usage**: Import only what you need
 
 ---
@@ -365,13 +365,8 @@ npm run lint   # ESLint check
 - Too many items? Consider intersection observer
 - Animations janky? Verify GPU acceleration (`will-change` CSS)
 
-### Theme Not Persisting
-- Check localStorage in browser dev tools
-- Verify `useTheme` hook is imported correctly
-- Ensure no conflicting theme scripts
-
 ### Component Not Loading
-- Check `componentMap` in `CardContent.jsx`
+- Check `componentMap` in `features/gallery/GalleryContent.jsx`
 - Verify dynamic import path is correct
 - Look for errors in ErrorBoundary UI
 
@@ -381,7 +376,7 @@ npm run lint   # ESLint check
 
 - **100% JavaScript codebase** - no TypeScript
 - **Motion library** (not Framer Motion) - import from `motion/react`
-- **Lucide icons preferred** - consistent with design system
+- **Phosphor icons** (bold weight) - the only icon library
 - **Factory functions** - use for canvas items (DRY principle)
 - **Error boundaries** - wrap risky components
 - **SSR awareness** - always check `typeof window` before browser APIs
