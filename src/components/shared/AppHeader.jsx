@@ -8,7 +8,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 
-export default function AppHeader({ title, tone = "default" }) {
+export default function AppHeader({ title, tone = "default", actions, titleOnly = false }) {
     // "light" is for pages with a full-bleed picture behind the header.
     const light = tone === "light"
     const link = light
@@ -18,24 +18,28 @@ export default function AppHeader({ title, tone = "default" }) {
         ? "text-white font-medium drop-shadow-[0_1px_6px_rgba(0,0,0,0.45)]"
         : "text-slate-900 dark:text-slate-100 font-medium"
     return (
-        <header className="w-full z-50">
-            <div className="w-full px-6 py-4">
+        <header className="w-full z-50" data-app-header>
+            <div className={`flex w-full items-center justify-between gap-4 ${titleOnly ? "px-4 py-2" : "px-6 py-4"}`}>
                 <Breadcrumb>
                     <BreadcrumbList>
-                        <BreadcrumbItem>
-                            <BreadcrumbLink href="https://www.tonyzeb.com/" className={link}>
-                                Tony
-                            </BreadcrumbLink>
-                        </BreadcrumbItem>
-                        <BreadcrumbSeparator className={light ? "text-white/70" : undefined} />
-                        <BreadcrumbItem>
-                            <BreadcrumbLink href="/" className={link}>
-                                Playground
-                            </BreadcrumbLink>
-                        </BreadcrumbItem>
+                        {!titleOnly && (
+                            <>
+                            <BreadcrumbItem>
+                                <BreadcrumbLink href="https://www.tonyzeb.com/" className={link}>
+                                    Tony
+                                </BreadcrumbLink>
+                            </BreadcrumbItem>
+                            <BreadcrumbSeparator className={light ? "text-white/70" : undefined} />
+                            <BreadcrumbItem>
+                                <BreadcrumbLink href="/" className={link}>
+                                    Playground
+                                </BreadcrumbLink>
+                            </BreadcrumbItem>
+                            </>
+                        )}
                         {title && (
                             <>
-                                <BreadcrumbSeparator className={light ? "text-white/70" : undefined} />
+                                {!titleOnly && <BreadcrumbSeparator className={light ? "text-white/70" : undefined} />}
                                 <BreadcrumbItem>
                                     <span className={current}>
                                         {title}
@@ -45,6 +49,7 @@ export default function AppHeader({ title, tone = "default" }) {
                         )}
                     </BreadcrumbList>
                 </Breadcrumb>
+                {actions && <div className={`flex shrink-0 items-center gap-1 ${titleOnly ? "" : "-my-1"}`}>{actions}</div>}
             </div>
         </header>
     );

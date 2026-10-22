@@ -83,6 +83,14 @@ body {
 }
 
 @layer utilities {
+  /* Thin scrollbar that only appears while the scroller is hovered. */
+  .scrollbar-minimal {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  .scrollbar-minimal:hover {
+    scrollbar-color: rgb(15 23 42 / 0.22) transparent;
+  }
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
@@ -90,4 +98,9 @@ body {
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+}
+
+/* The home split panel shows the breadcrumb itself. */
+html[data-embed] [data-app-header] {
+  display: none;
 }

@@ -4,7 +4,6 @@
 const createGalleryCard = (id, overrides) => ({
   id,
   interactive: true,
-  openInNewTab: false,
   archived: false,
   ...overrides,
 });
@@ -81,7 +80,6 @@ const galleryCatalog = [
     title: 'Draw Canvas',
     size: { width: 250, height: 180 },
     link: '/tools/draw-canvas',
-    openInNewTab: true,
   }),
   videoCard('img-stack', {
     content: '/thumbnails/image_stack.mp4',

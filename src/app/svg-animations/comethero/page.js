@@ -1,5 +1,5 @@
 import CometHero from "./CometHero";
-import { Download } from "lucide-react";
+import { DownloadSimple } from "@phosphor-icons/react/ssr";
 import { Button } from "@/components/ui/button";
 
 export const metadata = {
@@ -15,7 +15,7 @@ export default function CoinFlipPage() {
         <p className="dark:text-slate-500 text-slate-600 text-sm font-sans tracking-wider">Your download is starting automatically. Click below to retry manually.</p>
         <div className="pt-8">
           <Button size="lg" variant="secondary" className="font-sans tracking-wide cursor-pointer">
-            <Download className="w-4 h-4" />
+            <DownloadSimple weight="bold" className="w-4 h-4" />
             Download Comet
           </Button>
           <p className="text-slate-500 text-xs pt-2 font-sans tracking-wider">For macOS 14 or later</p>

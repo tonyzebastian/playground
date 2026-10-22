@@ -1,6 +1,6 @@
 'use client';
 
-import { Eraser, Download, Upload } from 'lucide-react';
+import { Eraser, DownloadSimple, UploadSimple } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
@@ -151,7 +151,7 @@ export default function DrawingToolbar({
             size="sm"
             title="Upload image"
           >
-            <Upload className="w-4 h-4" />
+            <UploadSimple weight="bold" className="w-4 h-4" />
           </Button>
         )}
 
@@ -162,7 +162,7 @@ export default function DrawingToolbar({
             size="sm"
             title="Clear drawings"
           >
-            <Eraser className="w-4 h-4" />
+            <Eraser weight="bold" className="w-4 h-4" />
           </Button>
         )}
 
@@ -172,7 +172,7 @@ export default function DrawingToolbar({
             size="sm"
             title="Save drawing"
           >
-            <Download className="w-4 h-4" />
+            <DownloadSimple weight="bold" className="w-4 h-4" />
           </Button>
         )}
       </div>
