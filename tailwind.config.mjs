@@ -1,6 +1,5 @@
 /** @type {import('tailwindcss').Config} */
 const config = {
-    darkMode: ["class"],
     content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -10,7 +9,7 @@ const config = {
   theme: {
   	extend: {
 		fontFamily: {
-			sans: ['var(--font-raleway)'], // Default font
+			sans: ['var(--font-raleway)', 'Arial', 'Helvetica', 'sans-serif'], // Default font
 			heading: ['var(--font-merriweather)'], // Custom font for headings
 		  },
   		colors: {
@@ -44,6 +43,7 @@ const config = {
   				DEFAULT: 'hsl(var(--destructive))',
   				foreground: 'hsl(var(--destructive-foreground))'
   			},
+  			canvas: 'hsl(var(--canvas))',
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',
   			ring: 'hsl(var(--ring))',

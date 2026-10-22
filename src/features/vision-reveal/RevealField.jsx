@@ -26,7 +26,6 @@ export function RevealField({ children, className }) {
   const canvasRef = useRef(null);
   const rendererRef = useRef(null);
 
-  const isDesktop = useMatchMedia("(min-width: 1024px)");
   const hasHover = useMatchMedia("(hover: hover) and (pointer: fine)");
   const reduced = useMatchMedia("(prefers-reduced-motion: reduce)");
   const inView = useInView(containerRef, { amount: 0.2, once: false });
@@ -44,7 +43,9 @@ export function RevealField({ children, className }) {
     }
   }, []);
 
-  const canvasActive = isDesktop && hasHover && webgl2Supported && !reduced;
+  // Gate on input capability, not viewport width: this page also renders inside
+  // the home split panel, where the iframe is narrower than 1024px on desktop.
+  const canvasActive = hasHover && webgl2Supported && !reduced;
 
   useEffect(() => {
     if (!canvasActive || !canvasRef.current) return undefined;

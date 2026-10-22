@@ -1,4 +1,4 @@
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight } from '@phosphor-icons/react/ssr';
 import styles from './physio.module.css';
 
 export const metadata = {
@@ -42,7 +42,7 @@ export default function PhysioPage() {
 
           <button className={styles.headerCta} type="button" disabled>
             Book a visit
-            <ArrowUpRight size={16} strokeWidth={1.8} />
+            <ArrowUpRight weight="bold" size={16} />
           </button>
         </header>
 
@@ -58,7 +58,7 @@ export default function PhysioPage() {
             </p>
             <button className={styles.primaryCta} type="button" disabled>
               Book a visit
-              <ArrowUpRight size={17} strokeWidth={1.7} />
+              <ArrowUpRight weight="bold" size={17} />
             </button>
           </div>
 

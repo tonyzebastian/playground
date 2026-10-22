@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, Suspense } from 'react';
+import { memo, Suspense, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 
@@ -17,20 +17,58 @@ const componentMap = {
   CoinFlip: dynamic(() => import('@/app/svg-animations/coinflip/CoinFlip')),
 };
 
-function GalleryContent({ contentType, content, component, componentProps, title, objectPosition }) {
+// Live previews (canvases, iframes) are only mounted near the viewport, so
+// scrolling past them frees their GPU/DOM cost.
+function MountWhenNearby({ children }) {
+  const ref = useRef(null);
+  const [near, setNear] = useState(false);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return undefined;
+    const observer = new IntersectionObserver(([entry]) => setNear(entry.isIntersecting), { rootMargin: '300px' });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  return <div ref={ref} className="h-full w-full">{near ? children : null}</div>;
+}
+
+// Thumbnails only play while on screen, so a long gallery doesn't decode every
+// video at once.
+function PreviewVideo({ src, zoom }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const video = ref.current;
+    if (!video) return undefined;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) video.play().catch(() => {});
+      else video.pause();
+    }, { rootMargin: '200px' });
+    observer.observe(video);
+    return () => observer.disconnect();
+  }, []);
+
+  return <video ref={ref} src={src} className="h-full w-full object-cover" style={zoom ? { transform: `scale(${zoom})` } : undefined} preload="metadata" muted loop playsInline />;
+}
+
+function GalleryContent({ contentType, content, component, componentProps, title, objectPosition, zoom }) {
   if (contentType === 'image') {
     return (
       <img
         src={content}
         alt={title}
         className="h-full w-full object-cover"
+        loading="lazy"
+        decoding="async"
         style={objectPosition ? { objectPosition } : undefined}
       />
     );
   }
 
   if (contentType === 'video') {
-    return <video src={content} className="h-full w-full object-cover" autoPlay muted loop playsInline />;
+    return <PreviewVideo src={content} zoom={zoom} />;
   }
 
   if (contentType === 'component') {
@@ -42,11 +80,13 @@ function GalleryContent({ contentType, content, component, componentProps, title
 
     return (
       <div className="flex h-full w-full items-center justify-center" suppressHydrationWarning>
-        <ErrorBoundary>
-          <Suspense fallback={<ComponentSkeleton />}>
-            <Component {...(componentProps || {})} />
-          </Suspense>
-        </ErrorBoundary>
+        <MountWhenNearby>
+          <ErrorBoundary>
+            <Suspense fallback={<ComponentSkeleton />}>
+              <Component {...(componentProps || {})} />
+            </Suspense>
+          </ErrorBoundary>
+        </MountWhenNearby>
       </div>
     );
   }

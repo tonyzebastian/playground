@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, Copy, Droplets, MousePointer2, Sparkles, Waves } from "lucide-react";
+import { ArrowLeft, Check, Copy, Drop, Cursor, Sparkle, Waves } from "@phosphor-icons/react";
 import styles from "./PondShaderGallery.module.css";
 
 const vertexShader = `attribute vec2 aPosition;
@@ -165,16 +165,16 @@ function CopyButton() {
       setCopied(true); setTimeout(() => setCopied(false), 1500);
     } catch { setCopied(false); }
   };
-  return <button className={styles.copy} onClick={copy}>{copied ? <Check size={15} /> : <Copy size={15} />}{copied ? "Copied" : "Copy water shader"}</button>;
+  return <button className={styles.copy} onClick={copy}>{copied ? <Check weight="bold" size={15} /> : <Copy weight="bold" size={15} />}{copied ? "Copied" : "Copy water shader"}</button>;
 }
 
 export default function PondShaderGallery() {
   return <main className={styles.page}>
-    <a href="/" className={styles.back}><ArrowLeft size={16} /> Back to playground</a>
+    <a href="/" className={styles.back}><ArrowLeft weight="bold" size={16} /> Back to playground</a>
     <header className={styles.intro}><p className={styles.kicker}>PRIVATE REFERENCE · POND STUDY 01</p><h1>Layered pond<br /><em>rendering kit.</em></h1><p>This is a reusable study of the Bao To pond: procedural water and live ripples in WebGL, with two inexpensive canvas layers that give it an illustrated edge.</p></header>
-    <section className={styles.hero}><PondCanvas /><div className={styles.heroLabel}><Waves size={16} /> Click anywhere to make a ripple</div></section>
+    <section className={styles.hero}><PondCanvas /><div className={styles.heroLabel}><Waves weight="bold" size={16} /> Click anywhere to make a ripple</div></section>
     <section className={styles.indexHeader}><div><p className={styles.kicker}>LAYER INDEX</p><h2>Each piece stands on its own.</h2></div><CopyButton /></section>
-    <section className={styles.grid}>{shaderEntries.map((entry) => <article className={styles.card} key={entry.id}><div className={styles.preview}><PondCanvas layer={entry.id} /><div className={styles.previewTag}>{entry.id === "water" ? <Droplets size={14} /> : entry.id === "ripple" ? <MousePointer2 size={14} /> : <Sparkles size={14} />}{entry.id === "ripple" ? "Tap to test" : "Live preview"}</div></div><div className={styles.cardBody}><p className={styles.number}>{entry.eyebrow}</p><h3>{entry.title}</h3><p>{entry.description}</p><div className={styles.use}><strong>Reuse:</strong> {entry.uses}</div></div></article>)}</section>
+    <section className={styles.grid}>{shaderEntries.map((entry) => <article className={styles.card} key={entry.id}><div className={styles.preview}><PondCanvas layer={entry.id} /><div className={styles.previewTag}>{entry.id === "water" ? <Drop weight="bold" size={14} /> : entry.id === "ripple" ? <Cursor weight="bold" size={14} /> : <Sparkle weight="bold" size={14} />}{entry.id === "ripple" ? "Tap to test" : "Live preview"}</div></div><div className={styles.cardBody}><p className={styles.number}>{entry.eyebrow}</p><h3>{entry.title}</h3><p>{entry.description}</p><div className={styles.use}><strong>Reuse:</strong> {entry.uses}</div></div></article>)}</section>
     <section className={styles.notes}><p className={styles.kicker}>IMPLEMENTATION NOTES</p><p><strong>Stack order:</strong> WebGL water → paper texture → reeds → SVG creatures. The texture is deliberately drawn only at setup and resize; only the water and reeds own animation frames.</p><p><strong>Portable contract:</strong> the fragment shader expects <code>u_resolution</code>, <code>u_time</code>, and a 12-item <code>u_ripples</code> vec4 array. Each ripple is {"{ x, y, startTime, strength }"} in canvas-pixel coordinates.</p></section>
   </main>;
 }

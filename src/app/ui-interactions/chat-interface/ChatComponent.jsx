@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Link2 } from 'lucide-react';
+import { LinkSimple } from '@phosphor-icons/react';
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -72,7 +72,7 @@ const LinkBadge = React.memo(({ link, linkStyle }) => (
       borderColor: linkStyle.borderColor
     }}
   >
-    <Link2 size={12} color={linkStyle.iconColor} />
+    <LinkSimple weight="bold" size={12} color={linkStyle.iconColor} />
     <span>{link.text}</span>
   </div>
 ));

@@ -66,13 +66,14 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={`${merriweather.variable} ${raleway.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${merriweather.variable} ${raleway.variable}`}>
       <head>
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              // Ensure light mode is set immediately (before React hydration)
-              document.documentElement.classList.remove('dark');
+              // Pages shown inside the home split panel drop their own
+              // breadcrumb header; the panel renders it instead.
+              if (window.self !== window.top) document.documentElement.dataset.embed = '';
 
               // A pathname beginning with // is parsed by Next's client router as
               // a protocol-relative URL (for example, //vault/links becomes

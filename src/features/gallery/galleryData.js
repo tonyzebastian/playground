@@ -4,7 +4,6 @@
 const createGalleryCard = (id, overrides) => ({
   id,
   interactive: true,
-  openInNewTab: false,
   archived: false,
   ...overrides,
 });
@@ -26,11 +25,12 @@ const componentCard = (id, component, options) => createGalleryCard(id, {
 });
 
 const galleryCatalog = [
-  imageCard('fish', {
-    content: '/thumbnails/fish.gif',
-    title: 'A School of Fish',
+  videoCard('evening-window', {
+    content: '/thumbnails/evening_window.mp4',
+    title: 'Evening Window, July 2026',
     size: { width: 280, height: 200 },
-    link: '/experiences/fish',
+    zoom: 1.32, // the render has white margins baked in; crop them out
+    link: '/feelings/window-01',
   }),
   componentCard('flock', 'Flock', {
     title: 'Flock in Flight',
@@ -50,6 +50,12 @@ const galleryCatalog = [
     size: { width: 240, height: 170 },
     link: '/ui-interactions/vision-reveal',
   }),
+  imageCard('fish', {
+    content: '/thumbnails/fish.gif',
+    title: 'A School of Fish',
+    size: { width: 280, height: 200 },
+    link: '/experiences/fish',
+  }),
   componentCard('clock', 'Clock', {
     componentProps: { size: 180, timeZoneOffset: 0 },
     title: 'World Clock',
@@ -63,13 +69,6 @@ const galleryCatalog = [
     size: { width: 280, height: 200 },
     link: '/experiences/slate-cars',
   }),
-  videoCard('evening-window', {
-    content: '/thumbnails/evening_window.mp4',
-    title: 'Evening Window, July 2026',
-    size: { width: 280, height: 200 },
-    link: '/feelings/window-01',
-  }),
-
   imageCard('mosaic', {
     content: '/thumbnails/mosaic.jpg',
     title: 'Mosaic Image Lab',
@@ -81,7 +80,6 @@ const galleryCatalog = [
     title: 'Draw Canvas',
     size: { width: 250, height: 180 },
     link: '/tools/draw-canvas',
-    openInNewTab: true,
   }),
   videoCard('img-stack', {
     content: '/thumbnails/image_stack.mp4',
@@ -132,6 +130,7 @@ const galleryCatalog = [
     size: { width: 240, height: 170 },
     link: '/svg-animations/coinflip',
     backgroundColor: '#f8fafc',
+    archived: true,
   }),
   videoCard('comet', {
     content: '/thumbnails/comet.mp4',

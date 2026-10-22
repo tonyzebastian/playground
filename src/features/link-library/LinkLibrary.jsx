@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Link2, LoaderCircle, Search, X } from "lucide-react";
+import { CaretDown, LinkSimple, CircleNotch, MagnifyingGlass, X } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
 import styles from "./LinkLibrary.module.css";
 
@@ -48,13 +48,13 @@ export default function LinkLibrary() {
     <header className={styles.header}>
       <h1>Library</h1>
       <section className={styles.controls} aria-label="Link filters">
-        <label className={styles.search}><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search links and notes" /></label>
-        <label className={styles.tagSelect}><span className={styles.srOnly}>Filter by tag</span><select value={activeTag} onChange={(event) => setActiveTag(event.target.value)}><option value="all">All tags ({bookmarks.length})</option>{tags.map((tag) => <option key={tag.id} value={tag.name}>{tag.label} ({tag.count})</option>)}</select><ChevronDown className={styles.selectIcon} size={18} aria-hidden="true" /></label>
+        <label className={styles.search}><MagnifyingGlass weight="bold" size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search links and notes" /></label>
+        <label className={styles.tagSelect}><span className={styles.srOnly}>Filter by tag</span><select value={activeTag} onChange={(event) => setActiveTag(event.target.value)}><option value="all">All tags ({bookmarks.length})</option>{tags.map((tag) => <option key={tag.id} value={tag.name}>{tag.label} ({tag.count})</option>)}</select><CaretDown weight="bold" className={styles.selectIcon} size={18} aria-hidden="true" /></label>
       </section>
     </header>
 
-    {message && <p className={styles.message}>{message}<button onClick={() => setMessage("")} aria-label="Dismiss message"><X size={15} /></button></p>}
-    {isLoading ? <div className={styles.empty}><LoaderCircle className={styles.spin} size={22} /> Loading your library…</div> : filteredBookmarks.length ? <section className={styles.list}>{filteredBookmarks.map((bookmark) => <BookmarkRow key={bookmark.id} bookmark={bookmark} />)}</section> : <div className={styles.empty}><Link2 size={26} /><h2>{bookmarks.length ? "Nothing matches that filter." : "Your library is waiting."}</h2><p>{bookmarks.length ? "Try another tag or search term." : "Add references through the D1 library."}</p></div>}
+    {message && <p className={styles.message}>{message}<button onClick={() => setMessage("")} aria-label="Dismiss message"><X weight="bold" size={15} /></button></p>}
+    {isLoading ? <div className={styles.empty}><CircleNotch weight="bold" className={styles.spin} size={22} /> Loading your library…</div> : filteredBookmarks.length ? <section className={styles.list}>{filteredBookmarks.map((bookmark) => <BookmarkRow key={bookmark.id} bookmark={bookmark} />)}</section> : <div className={styles.empty}><LinkSimple weight="bold" size={26} /><h2>{bookmarks.length ? "Nothing matches that filter." : "Your library is waiting."}</h2><p>{bookmarks.length ? "Try another tag or search term." : "Add references through the D1 library."}</p></div>}
   </main>;
 }
 
