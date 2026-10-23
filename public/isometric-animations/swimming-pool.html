@@ -630,10 +630,10 @@ function towel(cx, cy, m){
   let st = ''; for (const dy of [-18, -8, 2, 12, 22]) st += pd([[cx - 22, cy + dy, 29.55], [cx + 22, cy + dy, 29.55]], false);
   return s + `<path d="${st}" fill="none" stroke="#fff" stroke-width="1.6" opacity=".8"/>`;
 }
-function sideTable(x, y){
+const drinkAt = (x, y, z) => cyl(x, y, z, z + 14, 4.2, CLEAR, toneI, .9, 12) + cyl(x, y, z, z + 8, 3.5, matOf('#f4a73a'), toneI, .1, 12) + rod([x, y, z + 4], [x + 5, y - 3, z + 22], .9, matOf('#e2483d'), toneI, .6);
+function sideTable(x, y, glass = true){
   let s = cyl(x, y, 0, 30, 10, CERAMIC, toneI, 1.2, 18) + cyl(x, y, 30, 32, 14, CERAMIC, toneI, 1.1, 20);
-  s += cyl(x - 3, y, 32, 46, 4.2, CLEAR, toneI, .9, 12) + cyl(x - 3, y, 32, 40, 3.5, matOf('#f4a73a'), toneI, .1, 12);
-  return s + rod([x - 3, y, 36], [x + 2, y - 3, 54], .9, matOf('#e2483d'), toneI, .6);
+  return s + (glass ? drinkAt(x - 3, y, 32) : '');
 }
 function ringBuoy(x, y){
   let s = rod([x, y, 0], [x, y, 62], 2, WOOD, toneI, .8) + bxI(x - 3, y - 14, 58, x + 3, y + 14, 62, WOOD, .7);
@@ -801,11 +801,19 @@ function guardPose(t){
     kpL:norm(add3(F, [0, 0, .3])), kpR:norm(add3(F, [0, 0, .3])), fdL:F, fdR:F, hL:thigh(1), hR:lerp3(thigh(-1), brow, g),
     epL:norm(add3(mul3(Sd, .7), [0, 0, -.4])), epR:norm(add3(mul3(Sd, -.7), [-F[0]*.2, -F[1]*.2, g*.8 - .4])) };
 }
+// the sunbather: arms behind the head, then she reaches for her drink on the side table, sips, puts it back; one foot idly taps
 function sunPose(t, cx, cy){
-  const hz = 27 + 7.5, py = cy + 8, sway = .6*Math.sin(t*1.1);
-  return { pel:[cx, py, hz + .2*sway], up:[0, -1, 0], side:[1, 0, 0], hdir:norm([0, -1, .5]), fd:norm([0, -.15, 1]),
-    aL:[cx + 9, py + 78, 27 + 7], aR:[cx - 9, py + 52, 27 + 22 + 3*Math.sin(t*.9)], kpL:Z3, kpR:Z3, fdL:norm([.2, .4, 1]), fdR:norm([-.15, .3, 1]),
-    hL:[cx + 17, py - 55, hz + 16], hR:[cx - 17, py - 55, hz + 16], epL:[1, 0, .3], epR:[-1, 0, .3] };
+  const hz = 27 + 7.5, py = cy + 8, sway = .6*Math.sin(t*1.1), c = frac(t/16);
+  const rest = [cx + 17, py - 55, hz + 16], glass = [556, 205, 50], mouth = [cx + 6, py - 62, hz + 16];
+  let hL;
+  if (c < .26) hL = lerp3(rest, glass, sst(.08, .2, c));
+  else if (c < .55) hL = lerp3(glass, mouth, sst(.26, .38, c));
+  else if (c < .7) hL = lerp3(mouth, glass, sst(.55, .67, c));
+  else hL = lerp3(glass, rest, sst(.7, .82, c));
+  const reaching = c > .06 && c < .84;
+  return { _held:c > .21 && c < .69, pel:[cx, py, hz + .2*sway], up:[0, -1, 0], side:[1, 0, 0], hdir:norm([0, -1, .5]), fd:norm([0, -.15, 1]),
+    aL:[cx + 9, py + 78, 27 + 7 + 2.5*Math.max(0, Math.sin(t*2.2))], aR:[cx - 9, py + 52, 27 + 22 + 3*Math.sin(t*.9)], kpL:Z3, kpR:Z3, fdL:norm([.2, .4, 1]), fdR:norm([-.15, .3, 1]),
+    hL, hR:[cx - 17, py - 55, hz + 16], epL:reaching ? norm([.6, .2, .6]) : [1, 0, .3], epR:[-1, 0, .3] };
 }
 
 /* ---------- scene ---------- */
@@ -875,7 +883,7 @@ function scene(st, m){
   const sws = [swimmer('crawl', t, LANES[0], 46, 0, SW.crawl), swimmer('breast', t, LANES[1], 24, .35, SW.breast), swimmer('back', t, LANES[2], 33, .7, SW.back)];
   const ds = diverState(t), dposeRaw = ds.phase === 'water' ? diverWaterPose(t, ds.s) : diverPose(ds), dp = person(dposeRaw, SW.diver);
   const dsp = ds.wc ? splitParts(dp, 'crawl') : null, dlp = ds.phase === 'water' && ds.s > 1.2 && ds.s < 5 ? diverLp(ds.s) : null;
-  const gp = person(guardPose(t), SW.guard), sb = person(sunPose(t, 518, 285), SW.sun);
+  const sbp = sunPose(t, 518, 285), gp = person(guardPose(t), SW.guard), sb = person(sbp, SW.sun);
 
   let s = deckSvg(m);
   /* shadows on the deck (not on the pool) */
@@ -904,19 +912,20 @@ function scene(st, m){
   s += LANES.map((x, i) => startBlock(x, i + 1)).join('');
   s += palmPot(36, 56, 1.1, t) + palmPot(640 - 36, 40, 1.2, t) + palmPot(36, 270, .8, t);
   /* lifeguard */
-  s += guardChair(...CHAIR) + pdraw(gp) + guardChairFront(...CHAIR);
-  s += rod([CHAIR[0] - 20, CHAIR[1] - 24, 90], [CHAIR[0] - 20, CHAIR[1] - 24, 228], 1.8, METAL, toneI, .8) + parasol(CHAIR[0] - 22, CHAIR[1] - 8, 206, 232, 56, '#e8584a', '#fbfaf3');
+  s += guardChair(...CHAIR) + rod([CHAIR[0] - 20, CHAIR[1] - 24, 90], [CHAIR[0] - 20, CHAIR[1] - 24, 228], 1.8, METAL, toneI, .8) + pdraw(gp) + guardChairFront(...CHAIR);
+  s += parasol(CHAIR[0] - 22, CHAIR[1] - 8, 206, 232, 56, '#e8584a', '#fbfaf3');
   s += rod([560, 140, 0], [560, 140, 186], 2.2, METAL, toneI, .8) + cyl(560, 140, 0, 3, 9, METAL, toneI, .8, 14) + parasol(560, 140, 170, 198, 66, m.l, '#fbfaf3', 12) + rod([560, 140, 198], [560, 140, 208], 1.5, METAL, toneI, .8);
   /* left side of the pool, ladder */
-  s += shower(34, 440, t) + ringBuoy(36, 560) + ladder(LADY);
+  s += shower(34, 440, t) + ringBuoy(36, 560);
   /* loungers, table, parasol */
   const L1 = [518, 285], L2 = [600, 285];
-  s += loungerBase(...L1, mc) + loungerPillow(...L1) + pdraw(sb) + sideTable(559, 205);
+  s += loungerBase(...L1, mc) + loungerPillow(...L1) + pdraw(sb) + sideTable(559, 205, !sbp._held) + (sbp._held ? drinkAt(sb.j.wL[0], sb.j.wL[1], sb.j.wL[2] - 2) : '');
   s += loungerBase(...L2, mc) + loungerPillow(...L2) + towel(600, 305, m);
   s += palmPot(612, 730, 1.0, t) + palmPot(36, 730, 1.0, t);
   /* diving board, diver, splash */
-  s += divingBoard();
-  s += dsp ? drawParts(dsp.over) : pdraw(dp);
+  // in the water (or just past the tip) the diver is farther than the board and ladder, so they cover them; otherwise they are in front
+  const dSvg = dsp ? drawParts(dsp.over) : pdraw(dp), dBehind = ds.phase === 'water' || (ds.phase === 'air' && ds.y < 585);
+  s += (dBehind ? dSvg : '') + divingBoard() + ladder(LADY) + (dBehind ? '' : dSvg);
   { const sT = ((t % DT) + DT) % DT - HIT; if (sT > 0 && sT < 2.4) s += splash(BOARDX, LAND_Y, sT); }
   return s;
 }
@@ -1059,7 +1068,7 @@ document.title = 'Swimming Pool - UiGlow';
 })();
 </script>
 <script>
-/* page controls: the Isometric Animations page drives speed / pause / colour / wobble of every figure from one DialKit panel */
+/* page controls: the Illustrations page drives speed / pause / colour / wobble of every figure from one DialKit panel */
 addEventListener('message', e => {
   const d = e.data; if (!d || d.type !== 'figure-controls') return;
   const st = ui.st;
