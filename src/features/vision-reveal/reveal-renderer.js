@@ -200,6 +200,7 @@ export class RevealRenderer {
         this.startTime = performance.now();
         this.resizeObserver = null;
         this.disposed = false;
+        this.ready = false;
         this.loop = (now) => {
             if (!this.running)
                 return;
@@ -242,7 +243,10 @@ export class RevealRenderer {
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            this.ready = true;
             this.renderOnce();
+            canvas.dataset.ready = "true";
+            canvas.dispatchEvent(new Event("ready"));
         };
         img.src = imageSrc;
         this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -298,7 +302,7 @@ export class RevealRenderer {
     }
     draw(now) {
         const { gl } = this;
-        if (!this.pp[0] || !this.pp[1])
+        if (!this.ready || !this.pp[0] || !this.pp[1])
             return;
         const t = (now - this.startTime) / 1000;
         this.mouse[0] += (this.target[0] - this.mouse[0]) * 0.35;

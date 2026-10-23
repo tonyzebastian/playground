@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { CircularLoader } from "@/components/shared/CircularLoader";
 import styles from "./FeelingsScene.module.css";
 
 const vertexShader = `
@@ -303,6 +304,7 @@ function createShader(gl, type, source) {
 
 export default function WebGLBackground({ controls }) {
   const canvasRef = useRef(null);
+  const [ready, setReady] = useState(false);
   const controlsRef = useRef(controls);
 
   useEffect(() => {
@@ -486,8 +488,22 @@ export default function WebGLBackground({ controls }) {
       gl.uniform1i(kuwaharaTreeMaskLocation, 2);
       gl.uniform1i(kuwaharaWallTextureLocation, 3);
 
+      // Nothing is drawn (and the canvas stays transparent) until every image
+      // is decoded; otherwise the placeholder textures flash a hard window.
+      let pending = 0;
+      let revealed = false;
+      const trackImage = (image) => {
+        pending += 1;
+        const settle = () => {
+          pending -= 1;
+        };
+        image.addEventListener("load", settle, { once: true });
+        image.addEventListener("error", settle, { once: true });
+      };
+
       const loadTexture = (src, targetTexture, textureUnit) => {
         const image = new Image();
+        trackImage(image);
         image.onload = () => {
           gl.activeTexture(textureUnit);
           gl.bindTexture(gl.TEXTURE_2D, targetTexture);
@@ -547,6 +563,7 @@ export default function WebGLBackground({ controls }) {
       const branchSources = ["branch_01.png", "branch_02.png", "branch_03.png", "branch_04.png", "branch_05.png"];
       branchImages = branchSources.map((source) => {
         const image = new Image();
+        trackImage(image);
         image.src = `/feelings/window%2001/new_scene/${source}`;
         return image;
       });
@@ -556,6 +573,7 @@ export default function WebGLBackground({ controls }) {
       );
       leafImages = leafSources.map((source) => {
         const image = new Image();
+        trackImage(image);
         image.src = `/feelings/window%2001/new_scene/${source}`;
         return image;
       });
@@ -731,6 +749,7 @@ export default function WebGLBackground({ controls }) {
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, leavesFrontCanvas);
       };
 
+      trackImage(sunlightImage);
       sunlightImage.onload = paintPanelBlocker;
       sunlightImage.src = "/feelings/window%2001/sunlightv2.png";
 
@@ -758,6 +777,10 @@ export default function WebGLBackground({ controls }) {
 
       const start = performance.now();
       const render = (now) => {
+        if (pending > 0) {
+          animationFrame = requestAnimationFrame(render);
+          return;
+        }
         resize();
         paintBranchRig(now);
         paintLightMasks();
@@ -803,6 +826,11 @@ export default function WebGLBackground({ controls }) {
         gl.uniform1f(kuwaharaStrengthLocation, current.postProduction.kuwahara ? current.postProduction.kuwaharaStrength : 0);
         gl.uniform1f(kuwaharaGrainLocation, current.postProduction.grain);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
+        if (!revealed) {
+          revealed = true;
+          canvas.dataset.ready = "true";
+          setReady(true);
+        }
         animationFrame = requestAnimationFrame(render);
       };
 
@@ -828,5 +856,10 @@ export default function WebGLBackground({ controls }) {
     };
   }, []);
 
-  return <canvas className={styles.webglCanvas} ref={canvasRef} aria-label="Painterly blue wall background" />;
+  return (
+    <>
+      <canvas className={styles.webglCanvas} ref={canvasRef} aria-label="Painterly blue wall background" />
+      {!ready ? <CircularLoader className="text-white" /> : null}
+    </>
+  );
 }
