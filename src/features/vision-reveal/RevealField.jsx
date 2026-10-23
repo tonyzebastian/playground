@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { CircularLoader } from "@/components/shared/CircularLoader";
 import { useInView, useScroll } from "motion/react";
 import { REVEAL_DEFAULTS, RevealRenderer } from "./reveal-renderer";
 
@@ -25,6 +26,7 @@ export function RevealField({ children, className }) {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const rendererRef = useRef(null);
+  const [ready, setReady] = useState(false);
 
   const hasHover = useMatchMedia("(hover: hover) and (pointer: fine)");
   const reduced = useMatchMedia("(prefers-reduced-motion: reduce)");
@@ -56,7 +58,12 @@ export function RevealField({ children, className }) {
       return undefined;
     }
     rendererRef.current = renderer;
+    const onReady = () => setReady(true);
+    const canvas = canvasRef.current;
+    canvas.addEventListener("ready", onReady, { once: true });
     return () => {
+      canvas.removeEventListener("ready", onReady);
+      setReady(false);
       renderer.dispose();
       rendererRef.current = null;
     };
@@ -92,9 +99,10 @@ export function RevealField({ children, className }) {
           aria-hidden
           onPointerMove={handlePointerMove}
           onPointerLeave={() => rendererRef.current?.setMouse(0, 0, false)}
-          className="absolute inset-0 block h-full w-full"
+          className="absolute inset-0 block h-full w-full opacity-0 transition-opacity duration-1000 data-[ready=true]:opacity-100"
         />
       ) : null}
+      {canvasActive && !ready ? <CircularLoader className="text-slate-500" /> : null}
       <div className="pointer-events-none relative z-10 flex h-full flex-col items-center justify-center text-center">
         {children}
       </div>

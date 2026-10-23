@@ -10,8 +10,18 @@ const ComponentSkeleton = () => (
   </div>
 );
 
+// The mount wrapper is a plain block, so fixed-size previews centre themselves.
+const Centered = ({ children }) => (
+  <div className="flex h-full w-full items-center justify-center">{children}</div>
+);
+
 const componentMap = {
-  Clock: dynamic(() => import('@/app/experiences/clock/Clock')),
+  Clock: dynamic(() =>
+    import('@/app/experiences/clock/Clock').then((mod) => {
+      const Clock = mod.default;
+      return { default: (props) => <Centered><Clock {...props} /></Centered> };
+    }),
+  ),
   Flock: dynamic(() => import('@/app/experiences/flock/Flock')),
   PhysioStudio: dynamic(() => import('@/features/gallery/PhysioPreview')),
   CoinFlip: dynamic(() => import('@/app/svg-animations/coinflip/CoinFlip')),
