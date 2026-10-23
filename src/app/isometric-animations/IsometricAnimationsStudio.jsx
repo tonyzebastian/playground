@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useRef } from "react";
 import { DialRoot, useDialKitController } from "dialkit";
 import AppHeader from "@/components/shared/AppHeader";
-import { ILLUSTRATIONS, ILLUSTRATIONS_CONFIG } from "./illustrationsConfig";
-import styles from "./IllustrationsStudio.module.css";
+import { ISOMETRIC_ANIMATIONS, ISOMETRIC_ANIMATIONS_CONFIG } from "./isometricAnimationsConfig";
+import styles from "./IsometricAnimationsStudio.module.css";
 
-export default function IllustrationsStudio() {
+export default function IsometricAnimationsStudio() {
   const frames = useRef({});
 
   // Minimal scrollbar for the page (it also shows inside the gallery's side panel).
@@ -21,8 +21,8 @@ export default function IllustrationsStudio() {
     Object.values(frames.current).forEach((frame) => frame?.contentWindow?.postMessage({ type: "figure-controls", ...message }, "*"));
   }, []);
 
-  const dial = useDialKitController("Isometric Animations", ILLUSTRATIONS_CONFIG, {
-    id: "illustrations",
+  const dial = useDialKitController("Isometric Animations", ISOMETRIC_ANIMATIONS_CONFIG, {
+    id: "isometric-animations",
     onAction: (path) => { if (path === "playback.restart") send({ restart: true }); },
   });
   const { playback, look } = dial.values;
@@ -40,7 +40,7 @@ export default function IllustrationsStudio() {
       </div>
 
       <div className={styles.list}>
-        {ILLUSTRATIONS.map((item, i) => (
+        {ISOMETRIC_ANIMATIONS.map((item, i) => (
           <section key={item.id} className={styles.item} aria-labelledby={`${item.id}-title`}>
             <div className={styles.frame} style={{ aspectRatio: item.aspect }}>
               <iframe

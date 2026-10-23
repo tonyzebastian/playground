@@ -4,7 +4,7 @@
 export default function PhysioPreview() {
   return (
     <iframe
-      src="/physiotherapy-studio.html?embed=1"
+      src="/isometric-animations/physiotherapy-studio.html?embed=1"
       title="Physiotherapy Studio preview"
       loading="lazy"
       tabIndex={-1}

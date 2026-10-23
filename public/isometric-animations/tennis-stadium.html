@@ -706,7 +706,7 @@ ui = mountFigure({
   params:(st, q) => { if (q.has('t')) st.t = +q.get('t'); if (q.get('paused') === '1') st.paused = true; },
 });
 if (!ui.st.paused) runLoop();
-/* embedded in the Illustrations page: hide the page chrome and listen for the shared controls */
+/* embedded in the Isometric Animations page: hide the page chrome and listen for the shared controls */
 if (new URLSearchParams(location.search).has('embed')){
   const css = document.createElement('style');
   css.textContent = 'header,.actions,.controls,.made-with{display:none!important}body{padding:0;min-height:100vh;justify-content:center}.stage{padding:0;margin:0}#fig{max-height:100vh;margin:0}';

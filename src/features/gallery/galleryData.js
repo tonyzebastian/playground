@@ -41,7 +41,7 @@ const galleryCatalog = [
   componentCard('physio-studio', 'PhysioStudio', {
     title: 'Isometric Animations',
     size: { width: 300, height: 210 },
-    link: '/illustrations',
+    link: '/isometric-animations',
     backgroundColor: '#ffffff',
   }),
   videoCard('vision-reveal', {
