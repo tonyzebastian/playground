@@ -17,7 +17,7 @@ export const ISOMETRIC_ANIMATIONS = [
     id: 'tennis-stadium',
     title: 'Centre Court',
     src: '/isometric-animations/tennis-stadium.html',
-    aspect: 1.2,
+    aspect: 4 / 3,
   },
 ];
 
