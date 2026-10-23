@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
-const source=(await readFile(new URL('../../src/features/kalimba/audio.js',import.meta.url),'utf8')).replace(/'\.\/(pitch|listening|analysis|signatures)\.mjs'/g,(_,name)=>JSON.stringify(new URL(`../../src/features/kalimba/${name}.mjs`,import.meta.url).href));
+const source=(await readFile(new URL('../../src/features/kalimba/audio.js',import.meta.url),'utf8')).replace(/'\.\/(pitch|listening|analysis|signatures|capture)\.mjs'/g,(_,name)=>JSON.stringify(new URL(`../../src/features/kalimba/${name}.mjs`,import.meta.url).href));
 const {KalimbaAudio}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};};
 

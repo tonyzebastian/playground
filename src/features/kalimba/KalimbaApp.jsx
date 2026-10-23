@@ -10,11 +10,15 @@ import { loadKeys,saveKey,exportKeys,importKeys } from './storage';
 import { SONGS,noteName,nearestKey,playableSong } from './music.mjs';
 import { initialSong, nextSetupKey } from './flow.mjs';
 import { analyseCalibration, assertUniqueKey, toneProfile, calibrationMatch } from './calibration.mjs';
+import { CAPTURE_FORMAT, CUE_MS, captureScript, encodeWav } from './capture.mjs';
 
 const PREFERENCES='kalimba-preferences-v2';
 const preferences=()=>{try{return JSON.parse(localStorage.getItem(PREFERENCES)||'{}');}catch{return {};}};
 const decorate=keys=>keys.map(key=>({...key,label:noteName(key.midi)}));
 const EMPTY_SEQUENCE=[];
+const asDataUrl=blob=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(blob);});
+// What a capture keeps from each detection: enough to compare with an offline replay.
+const detection=frame=>({time:frame.time,onset:frame.onset,keyId:frame.keyId,frequency:frame.frequency,confidence:frame.confidence});
 
 export default function KalimbaApp({art}){
   const [editing,setEditing]=useState(null),[sheet,setSheet]=useState(null),[recordAll,setRecordAll]=useState(false);
@@ -27,10 +31,11 @@ export default function KalimbaApp({art}){
   const [songId,setSongId]=useState(null),[step,setStep]=useState(0),[running,setRunning]=useState(false);
   const [playing,setPlaying]=useState(false),[tempo,setTempo]=useState(76),[mode,setMode]=useState('wait'),[loop,setLoop]=useState(false);
   const [hits,setHits]=useState(0),[finished,setFinished]=useState(false);
+  const [captureOn,setCaptureOn]=useState(false),[captureFile,setCaptureFile]=useState(null),[cueKey,setCueKey]=useState(null);
   const audio=useRef(null),timer=useRef(null),captureTimer=useRef(null),captureFrames=useRef([]),capturePlucks=useRef([]),captureTones=useRef([]),captureFinishing=useRef(false),captureReady=useRef(false),onHear=useRef(()=>{});
   const epoch=useRef(0),alive=useRef(true),recordToken=useRef(0),finishedRef=useRef(false);
   const fileInput=useRef(null),root=useRef(null),recordFocus=useRef(null);
-  const timedHit=useRef(null);
+  const timedHit=useRef(null),captureFinish=useRef(null);
   const engine=()=>audio.current||(audio.current=new KalimbaAudio());
   const complete=keys.length===9;
   const displayKeys=keys;
@@ -42,6 +47,7 @@ export default function KalimbaApp({art}){
   const stop=useCallback(()=>{
     epoch.current++;recordToken.current++;clearTimeout(timer.current);clearTimeout(captureTimer.current);
     audio.current?.stopListening();audio.current?.stopPlayback();
+    captureFinish.current=null;setCueKey(null);
     setListening(false);setPending(false);setRecording(false);setPlaying(false);setRunning(false);setSignal(0);
   },[]);
   useEffect(()=>{
@@ -58,6 +64,13 @@ export default function KalimbaApp({art}){
     return()=>{alive.current=false;stop();audio.current?.dispose();audio.current=null;document.removeEventListener('visibilitychange',visibility);};
   },[stop]);
 
+  // Hidden capture mode for accuracy testing: Control+Option+Shift+K, or ?capture on phones.
+  useEffect(()=>{
+    if(new URLSearchParams(window.location.search).has('capture'))setCaptureOn(true);
+    const toggle=event=>{if(event.ctrlKey&&event.altKey&&event.shiftKey&&event.code==='KeyK'){event.preventDefault();setCaptureOn(on=>!on);}};
+    window.addEventListener('keydown',toggle);
+    return()=>window.removeEventListener('keydown',toggle);
+  },[]);
   useEffect(()=>{
     if(!loaded||!complete)return;
     try{localStorage.setItem(PREFERENCES,JSON.stringify({songId:songId??'free',tempo,mode,loop}));}catch{}
@@ -115,6 +128,51 @@ export default function KalimbaApp({art}){
     }catch(err){if(token===epoch.current)setError(err.message);}
     finally{if(token===epoch.current)setPending(false);}
   }
+  async function saveCapture(raw,details){
+    const backup=JSON.parse(await (await exportKeys(keys)).text());
+    const audioData=await asDataUrl(new Blob([encodeWav(raw.samples,raw.rate)],{type:'audio/wav'}));
+    const file={format:CAPTURE_FORMAT,createdAt:new Date().toISOString(),userAgent:navigator.userAgent,rate:raw.rate,settings:raw.settings,seconds:+(raw.samples.length/raw.rate).toFixed(2),...details,keys:backup.keys,audio:audioData};
+    const stamp=file.createdAt.slice(0,19).replace(/[:T]/g,'-');
+    setCaptureFile({blob:new Blob([JSON.stringify(file)],{type:'application/json'}),name:`kalimba-capture-${details.mode}${details.mode==='setup'?`-key${details.key+1}`:''}-${stamp}.json`,mode:details.mode,key:details.key});
+  }
+  function downloadCapture(){
+    if(!captureFile)return;
+    const url=URL.createObjectURL(captureFile.blob),a=document.createElement('a');a.href=url;a.download=captureFile.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);
+  }
+  // Guided capture: highlight one key per second and record raw audio alongside
+  // each cue's time, so recognition can be scored offline against what was asked.
+  async function startCapture(){
+    stop();setError('');setCaptureFile(null);setPending(true);
+    const token=epoch.current,cues=captureScript(keys),log={cues:[],detections:[]};
+    let started=false;
+    const finish=async()=>{
+      if(token!==epoch.current)return;
+      captureFinish.current=null;clearTimeout(timer.current);audio.current?.stopListening();
+      const raw=audio.current?.takeCapture();setListening(false);setCueKey(null);setSignal(0);
+      if(!raw){setError('Nothing was captured. Please try again.');return;}
+      setMessage('Preparing capture…');
+      try{await saveCapture(raw,{mode:'listen',cueMs:CUE_MS,...log});if(token===epoch.current)setMessage(`Capture ready: ${log.cues.length} cues. Save it and share the file.`);}
+      catch{if(token===epoch.current)setError('Couldn’t prepare the capture.');}
+    };
+    const cue=index=>{
+      if(token!==epoch.current)return;
+      if(index>=cues.length){setCueKey(null);setMessage('Done. Let the last note ring…');timer.current=setTimeout(finish,1500);return;}
+      const key=cues[index];log.cues.push({key,time:engine().captureClock()});
+      setCueKey(key);setMessage(`Capture ${index+1}/${cues.length} · pluck key ${key+1}`);
+      timer.current=setTimeout(()=>cue(index+1),CUE_MS);
+    };
+    try{
+      const ok=await engine().listen(result=>{
+        if(token!==epoch.current)return;
+        setSignal(Math.min(1,result.rms*12));
+        if(result.checking){setMessage('Checking room noise. Keep quiet for a moment…');return;}
+        if(result.pluck){log.detections.push(detection(result));if(Number.isInteger(result.keyId))animate(result.keyId);}
+        if(!started){started=true;setMessage('Get ready: pluck each highlighted key once, as it lights up.');timer.current=setTimeout(()=>cue(0),2500);}
+      },()=>{setListening(false);setCueKey(null);setMessage('Microphone disconnected. Capture stopped.');},keys,{capture:true});
+      if(ok&&token===epoch.current){setListening(true);captureFinish.current=finish;}
+    }catch(err){if(token===epoch.current)setError(err.message);}
+    finally{if(token===epoch.current)setPending(false);}
+  }
   async function tapKey(id){
     if(editing){if(!recording&&!pending&&!saving){setSelected(id);setCandidate(null);setCaptureCount(0);setCaptureMatch(null);setError('');recordFocus.current=id;setSheet('record');}return;}
     if(playing||pending)return;
@@ -153,7 +211,7 @@ export default function KalimbaApp({art}){
             captureTimer.current=setTimeout(()=>finishRecording(token),250);
           }
         }
-      });
+      },undefined,[],{capture:captureOn});
       if(!started||token!==recordToken.current)return;
       engine().startRecording();setRecording(true);
       captureTimer.current=setTimeout(()=>finishRecording(token),22000);
@@ -163,8 +221,10 @@ export default function KalimbaApp({art}){
   async function finishRecording(token=recordToken.current){
     if(token!==recordToken.current||captureFinishing.current)return;
     captureFinishing.current=true;clearTimeout(captureTimer.current);setRecording(false);setPending(true);
+    let raw=null,outcome='saved as a candidate';
     try{
       const blob=await engine().finishRecording();audio.current?.stopListening();setSignal(0);
+      raw=audio.current?.takeCapture()??null;
       if(token!==recordToken.current)return;
       if(!blob?.size)throw new Error('The recording was empty. Please try again.');
       const match=analyseCalibration(captureFrames.current,capturePlucks.current);
@@ -172,14 +232,20 @@ export default function KalimbaApp({art}){
       assertUniqueKey({id:selected,midi,frequency},keys);
       const chosen=capturePlucks.current[match.indexes[0]];
       const following=capturePlucks.current[match.indexes[0]+1];
-      const startSeconds=Math.max(0,(chosen.time-120)/1000);
-      const duration=following?Math.min(1.5,(following.time-chosen.time)/1000-.05):1.5;
+      // onset marks the window in which the attack appeared; time is when pitch was confirmed.
+      const at=pluck=>pluck.onset??pluck.time;
+      const startSeconds=Math.max(0,(at(chosen)-(chosen.onset!=null?60:120))/1000);
+      const duration=following?Math.min(1.5,(at(following)-at(chosen))/1000-.05):1.5;
       const sample=await engine().sample(blob,{startSeconds,duration});
       if(token!==recordToken.current)return;
       setCandidate({id:selected,midi,frequency,match:match.match,profile:toneProfile(captureTones.current.filter(frame=>Math.abs(1200*Math.log2(frame.frequency/frequency))<=85)),blob:sample,recordedAt:new Date().toISOString()});
       setMessage('');
-    }catch(err){audio.current?.stopListening();if(token===recordToken.current)setError(err.message);}
+    }catch(err){outcome=err.message;audio.current?.stopListening();if(token===recordToken.current)setError(err.message);}
     finally{if(token===recordToken.current)setPending(false);}
+    if(raw&&token===recordToken.current){
+      try{await saveCapture(raw,{mode:'setup',key:selected,outcome,plucks:capturePlucks.current.map(detection)});}
+      catch{setError('Couldn’t prepare the capture.');}
+    }
   }
   async function acceptRecording(){
     if(!candidate)return;
@@ -225,8 +291,8 @@ export default function KalimbaApp({art}){
   const busy=recording||pending||saving;
   const savedKey=keys.find(key=>key.id===selected);
   const currentKey=candidate||savedKey;
-  const target=editing?selected:song&&!finished?sequence[step]?.key:undefined;
-  const upcoming=!editing&&song&&!finished?sequence[step+1]?.key:undefined;
+  const target=cueKey??(editing?selected:song&&!finished?sequence[step]?.key:undefined);
+  const upcoming=cueKey==null&&!editing&&song&&!finished?sequence[step+1]?.key:undefined;
   const progress=sequence.length?(finished?100:step/sequence.length*100):0;
 
   return <main ref={root} className="kalimba-app" data-editing={editing||undefined}>
@@ -250,11 +316,11 @@ export default function KalimbaApp({art}){
 
       {!editing&&loaded&&<div className="kalimba-device-playback">
         {song&&<button className="kalimba-device-small" aria-label={playing?'Stop melody':'Hear melody'} onClick={()=>playing?stop():demonstrate()} disabled={pending}><SpeakerHigh weight="bold" size={18}/></button>}
-        <button className="kalimba-device-start" onClick={()=>listening||pending?stop():startListening(!!song)} aria-label={pending?'Cancel microphone request':listening?'Pause listening':song?'Start song practice':'Start free play'}>
+        <button className="kalimba-device-start" onClick={()=>listening||pending?(captureFinish.current?captureFinish.current():stop()):captureOn&&complete?startCapture():startListening(!!song)} aria-label={pending?'Cancel microphone request':listening?(captureFinish.current?'Finish capture':'Pause listening'):captureOn&&complete?'Start accuracy capture':song?'Start song practice':'Start free play'}>
           {listening?<Pause weight="bold" size={21}/>:pending?<X weight="bold" size={20}/>:<Microphone weight="bold" size={21}/>}
         </button>
         {song&&<button className="kalimba-device-small" aria-label="Restart song" onClick={()=>{stop();setStep(0);setHits(0);setFinished(false);finishedRef.current=false;setMessage('');}} disabled={pending}><ArrowCounterClockwise weight="bold" size={17}/></button>}
-        <span className="kalimba-device-caption">{pending?'Connecting…':listening?'Listening':finished?'Play again':song?'Start practice':'Start listening'}</span>
+        <span className="kalimba-device-caption">{pending?'Connecting…':listening?(cueKey!=null||captureFinish.current?'Capturing':'Listening'):captureOn&&complete?'Start capture':finished?'Play again':song?'Start practice':'Start listening'}</span>
       </div>}
 
     </div>
@@ -265,6 +331,7 @@ export default function KalimbaApp({art}){
     <div className="kalimba-bottom-status">
       {error&&!editing?<p role="alert" className="kalimba-error">{error}</p>:<p role="status">{message||(editing?'':finished?'Finished. Nicely played.':listening?(song?`Key ${(target??0)+1} next`:heard?`Heard ${heard}`:'Play any key.'):'Tap a key to hear it.')}</p>}
       {!editing&&song&&<div className="kalimba-song-progress" role="progressbar" aria-label="Song progress" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100}><span style={{width:`${progress}%`}}/></div>}
+      {captureOn&&<div className="kalimba-capture"><span>Capture mode</span>{captureFile&&<button onClick={downloadCapture}><DownloadSimple weight="bold" size={14}/> Save capture</button>}</div>}
       {(recording||listening)&&<div className="kalimba-level" aria-hidden="true"><span style={{width:`${signal*100}%`}}/></div>}
     </div>
 
@@ -280,6 +347,7 @@ export default function KalimbaApp({art}){
             onNote={midi=>{setCandidate({...currentKey,midi});setError('');}}
             onRecord={startRecording} onFinish={()=>finishRecording()} onSave={acceptRecording}
             onReplay={()=>engine().play(currentKey).catch(err=>setError(err.message))} onCancel={stop}
+            capture={captureOn} onSaveCapture={captureFile?.mode==='setup'&&captureFile.key===selected?downloadCapture:null}
           />:sheet==='songs'?<div className="kalimba-song-list">
             <button onClick={()=>chooseSong(null)} aria-pressed={!song}><span><strong>Free play</strong><small>No song. Just your instrument.</small></span>{!song&&<Check weight="bold" size={16}/>}</button>
             {SONGS.map(item=>{const arrangement=playableSong(item,keys);return <button key={item.id} disabled={!arrangement} aria-pressed={songId===item.id} onClick={()=>chooseSong(item)}><span><strong>{item.title}</strong><small>{arrangement?.adapted?'Adapted to your recorded keys':arrangement?item.detail:'Finish recording your keys'}</small></span>{songId===item.id&&<Check weight="bold" size={16}/>}</button>;})}

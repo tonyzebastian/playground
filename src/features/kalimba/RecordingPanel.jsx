@@ -1,9 +1,9 @@
 'use client';
 
-import { Check, Microphone, ArrowCounterClockwise, SpeakerHigh, X } from '@phosphor-icons/react';
+import { Check, DownloadSimple, Microphone, ArrowCounterClockwise, SpeakerHigh, X } from '@phosphor-icons/react';
 import {noteName} from './music.mjs';
 
-export default function RecordingPanel({selected,setup,keys,currentKey,candidate,recording,pending,saving,signal,count,hint,match,error,onNote,onRecord,onFinish,onSave,onReplay,onCancel}){
+export default function RecordingPanel({selected,setup,keys,currentKey,candidate,recording,pending,saving,signal,count,hint,match,error,onNote,onRecord,onFinish,onSave,onReplay,onCancel,capture=false,onSaveCapture=null}){
   const busy=recording||pending||saving;
   const slots=match?.accepted?count:count>=3?6:3;
   return <div className="kalimba-recording-panel">
@@ -31,11 +31,12 @@ export default function RecordingPanel({selected,setup,keys,currentKey,candidate
     </div>
     {error&&<p role="alert" className="kalimba-recording-error">{error}</p>}
     <div className="kalimba-recording-actions">
-      {recording?<button className="kalimba-primary" onClick={onFinish} disabled={count<3}><Check weight="bold" size={16}/> Finish</button>:candidate?<button className="kalimba-primary" onClick={onSave} disabled={busy}><Check weight="bold" size={16}/> {setup?'Save & next':'Save'}</button>:<button className="kalimba-primary" onClick={onRecord} disabled={busy}><Microphone weight="bold" size={16}/>{count?'Try again':currentKey?'Re-record':'Start recording'}</button>}
+      {recording?<button className="kalimba-primary" onClick={onFinish} disabled={count<3&&!capture}><Check weight="bold" size={16}/> Finish</button>:candidate?<button className="kalimba-primary" onClick={onSave} disabled={busy}><Check weight="bold" size={16}/> {setup?'Save & next':'Save'}</button>:<button className="kalimba-primary" onClick={onRecord} disabled={busy}><Microphone weight="bold" size={16}/>{count?'Try again':currentKey?'Re-record':'Start recording'}</button>}
       {currentKey&&!busy&&<button aria-label={`Replay key ${selected+1}`} onClick={onReplay}><SpeakerHigh weight="bold" size={18}/></button>}
       {candidate&&!busy&&<button aria-label="Retry recording" onClick={onRecord}><ArrowCounterClockwise weight="bold" size={17}/></button>}
       {(pending||recording)&&<button aria-label="Cancel recording" onClick={onCancel}><X weight="bold" size={18}/></button>}
     </div>
+    {capture&&<p className="kalimba-match-caption kalimba-capture-note">Capture mode: this recording’s raw audio is kept for testing.{onSaveCapture&&!busy&&<button onClick={onSaveCapture}><DownloadSimple weight="bold" size={13}/> Save capture</button>}</p>}
     {count>1&&<p className="kalimba-match-caption">Match compares pitch consistency, not loudness.</p>}
   </div>;
 }

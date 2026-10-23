@@ -1,5 +1,6 @@
 import { ListeningEngine } from './analysis.mjs';
 import { learnSignature, validSignature } from './signatures.mjs';
+import { CAPTURE_LIMIT_S } from './capture.mjs';
 
 export class KalimbaAudio {
   constructor(){this.stream=null;this.context=null;this.frame=0;this.generation=0;this.playGeneration=0;this.recorder=null;this.sources=new Set();this.signatures=new WeakMap();}
@@ -12,8 +13,9 @@ export class KalimbaAudio {
     await this.context.resume();
     return this.context;
   }
-  async listen(onFrame,onEnd,keys=[]){
+  async listen(onFrame,onEnd,keys=[],{capture=false}={}){
     this.stopListening();const generation=this.generation;
+    this.capture=capture?{chunks:[],length:0,start:null,settings:null}:null;
     if(!window.isSecureContext) throw new Error('Open the HTTPS version of this page to use the microphone.');
     if(!navigator.mediaDevices?.getUserMedia) throw new Error('Microphone access isn’t available in this browser.');
     await this.unlock();
@@ -27,22 +29,25 @@ export class KalimbaAudio {
     }
     if(generation!==this.generation){stream.getTracks().forEach(t=>t.stop());return false;}
     this.stream=stream;
+    if(this.capture)this.capture.settings=stream.getAudioTracks()[0]?.getSettings?.()??null;
     stream.getAudioTracks()[0].onended=()=>{this.stopListening();onEnd?.();};
     try{
       if(this.context.audioWorklet&&window.AudioWorkletNode){
-        if(!this.workletModule)this.workletModule=this.context.audioWorklet.addModule('/kalimba-audio/processor.js?v=3').catch(error=>{this.workletModule=null;throw error;});
+        if(!this.workletModule)this.workletModule=this.context.audioWorklet.addModule('/kalimba-audio/processor.js?v=4').catch(error=>{this.workletModule=null;throw error;});
         await this.workletModule;
         if(generation!==this.generation)return false;
         const input=this.context.createMediaStreamSource(stream);
         const node=new window.AudioWorkletNode(this.context,'kalimba-listener',{
           numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1],
-          processorOptions:{keys:prepared.map(({id,frequency,profile})=>({id,frequency,profile}))},
+          processorOptions:{keys:prepared.map(({id,frequency,profile})=>({id,frequency,profile})),capture},
         });
         this.input=input;this.worklet=node;
         let lastUi=-Infinity;
         node.port.onmessage=event=>{
           if(generation!==this.generation)return;
           const frame=event.data;
+          if(frame.raw){this.keepCapture(frame.raw);return;}
+          if(frame.captureStart!==undefined){if(this.capture)this.capture.start=frame.captureStart;return;}
           // Keep note events immediate; the visual level meter needs only 25 Hz.
           if(keys.length&&!frame.pluck&&frame.time-lastUi<40)return;
           lastUi=frame.time;onFrame(frame);
@@ -60,6 +65,7 @@ export class KalimbaAudio {
           analyser.getFloatTimeDomainData(buffer);
           // The analyser returns a rolling window; feed only the new hop.
           const hop=Math.round(this.context.sampleRate*.022);
+          if(this.capture){if(this.capture.start===null)this.capture.start=this.context.currentTime;this.keepCapture(buffer.slice(buffer.length-hop));}
           const result=engine.push(buffer.subarray(buffer.length-hop));
           if(result)onFrame(result);
         },22);
@@ -68,6 +74,21 @@ export class KalimbaAudio {
     }catch(error){if(generation===this.generation)this.stopListening();throw error;}
   }
 
+  keepCapture(samples){
+    const capture=this.capture;
+    if(!capture||capture.length>=CAPTURE_LIMIT_S*this.context.sampleRate)return;
+    capture.chunks.push(samples);capture.length+=samples.length;
+  }
+  // Milliseconds into the captured audio, on the same clock as the samples.
+  captureClock(){return this.capture?.start==null?null:(this.context.currentTime-this.capture.start)*1000;}
+  // Returns the captured audio and ends capture. Safe after stopListening().
+  takeCapture(){
+    const capture=this.capture;this.capture=null;
+    if(!capture?.length)return null;
+    const samples=new Float32Array(capture.length);let at=0;
+    for(const chunk of capture.chunks){samples.set(chunk,at);at+=chunk.length;}
+    return {samples,rate:this.context.sampleRate,settings:capture.settings};
+  }
   async prepareKeys(keys){
     const prepared=[];
     for(const key of keys){
