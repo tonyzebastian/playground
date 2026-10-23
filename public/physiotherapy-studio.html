@@ -1048,4 +1048,17 @@ document.title = 'Physiotherapy Studio - UiGlow';
   window.__bar = { ppBtn, rsBtn };
   setInterval(() => { const n = performance.now(), dt = Math.min(.1, (n - (setInterval.last || n))/1000); setInterval.last = n; if (!st.paused){ st.t += dt*st.speed; ui.render(); } }, EMBED ? 90 : 50);
 })();
-</script></body></html>
+</script><script>
+/* page controls: the Illustrations page drives speed / pause / colour / wobble of every figure from one DialKit panel */
+addEventListener('message', e => {
+  const d = e.data; if (!d || d.type !== 'figure-controls') return;
+  const st = ui.st;
+  if ('speed' in d) st.speed = +d.speed;
+  if ('paused' in d) st.paused = !!d.paused;
+  if (d.restart) st.t = 0;
+  if ('wobble' in d) document.getElementById('wob').setAttribute('scale', (d.wobble * INK_K).toFixed(2));
+  if ('pal' in d){ if (!st.pal0) st.pal0 = st.pal; st.pal = PALS[d.pal] ? d.pal : st.pal0; }
+  ui.render();
+});
+</script>
+</body></html>
