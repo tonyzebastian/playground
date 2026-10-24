@@ -42,6 +42,7 @@ export default function IsometricAnimationsStudio() {
       <div className={styles.list}>
         {ISOMETRIC_ANIMATIONS.map((item, i) => (
           <section key={item.id} className={styles.item} aria-labelledby={`${item.id}-title`}>
+            <h2 id={`${item.id}-title`} className={styles.title}>{String(i + 1).padStart(2, "0")} - {item.title}</h2>
             <div className={styles.frame} style={{ aspectRatio: item.aspect }}>
               <iframe
                 ref={(el) => { frames.current[item.id] = el; }}
@@ -51,7 +52,6 @@ export default function IsometricAnimationsStudio() {
                 onLoad={() => send(stateRef.current)}
               />
             </div>
-            <h2 id={`${item.id}-title`} className={styles.title}>{String(i + 1).padStart(2, "0")} - {item.title}</h2>
           </section>
         ))}
       </div>
