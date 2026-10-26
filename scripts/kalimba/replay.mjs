@@ -66,8 +66,10 @@ export function replayCapture(capture){
   }
   const {frames,tracker}=run(samples,rate,keys);
   const detections=frames.filter(frame=>frame.pluck).map(frame=>({time:frame.time,keyId:frame.keyId,frequency:frame.frequency,confidence:frame.confidence}));
-  const replay=scoreCapture(capture.cues,detections),live=scoreCapture(capture.cues,capture.detections??[]);
+  const pace={cueMs:capture.cueMs??1000};
+  const replay=scoreCapture(capture.cues,detections,pace),live=scoreCapture(capture.cues,capture.detections??[],pace);
   const total=capture.cues.length;
+  lines.push('',`${total} cues, one every ${(pace.cueMs/1000).toFixed(1)} s`);
   lines.push('',`detector: ${tracker instanceof TemplatePlucks?'spectral templates':'pitch fallback (some keys have no signature)'}`);
   if(tracker instanceof TemplatePlucks){
     const pairs=[];

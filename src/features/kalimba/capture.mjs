@@ -3,16 +3,16 @@
 // Shared by the app (recording) and scripts/kalimba/replay.mjs (scoring).
 
 export const CAPTURE_FORMAT='kalimba-capture-v1';
-export const CUE_MS=1000;          // one cue per second
+export const CUE_MS=2000;          // one cue every two seconds: time to find the tine and let it speak
 export const CAPTURE_LIMIT_S=180;  // never keep more than three minutes of audio
 
-// Every key up and down, then each pair of pitch neighbours back and forth,
-// because neighbours in pitch are the likeliest confusions.
+// Every key in order, each pair of pitch neighbours (the likeliest
+// confusions), then every key in reverse: 34 cues for nine keys.
 export function captureScript(keys){
   const ids=keys.map(key=>key.id).sort((a,b)=>a-b);
   const byPitch=[...keys].filter(key=>key.frequency>0).sort((a,b)=>a.frequency-b.frequency).map(key=>key.id);
-  const pairs=byPitch.slice(1).flatMap((id,index)=>[byPitch[index],id,byPitch[index],id]);
-  return [...ids,...[...ids].reverse(),...pairs];
+  const pairs=byPitch.slice(1).flatMap((id,index)=>[byPitch[index],id]);
+  return [...ids,...pairs,...[...ids].reverse()];
 }
 
 export function encodeWav(samples,rate){
@@ -46,8 +46,9 @@ export function decodeWav(buffer){
 }
 
 // Match each cue to the first unused detection from shortly before the cue
-// (an eager pluck) to most of the way to the next cue (a late one).
-export function scoreCapture(cues,detections,{early=150,late=900}={}){
+// (an eager pluck) to most of the way to the next cue (a late one). Pass the
+// capture's cue interval so late plucks are judged against the right pace.
+export function scoreCapture(cues,detections,{cueMs=1000,early=Math.min(300,cueMs*.15),late=cueMs*.85}={}){
   const used=new Set(),rows=[];
   for(const cue of cues){
     const index=detections.findIndex((hit,i)=>!used.has(i)&&hit.time>=cue.time-early&&hit.time<=cue.time+late);

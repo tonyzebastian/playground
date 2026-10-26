@@ -25,8 +25,9 @@ test('WAV encoding round-trips 16-bit audio',()=>{
 test('the capture script covers every key and each pitch-neighbour pair',()=>{
   const script=captureScript(keys);
   assert.deepEqual(script.slice(0,9),[0,1,2,3,4,5,6,7,8]);
-  assert.equal(script.length,9+9+8*4);
-  assert.deepEqual(script.slice(18,22),[0,1,0,1]);
+  assert.equal(script.length,9+8*2+9);
+  assert.deepEqual(script.slice(9,13),[0,1,1,2]);
+  assert.deepEqual(script.slice(-9),[8,7,6,5,4,3,2,1,0]);
 });
 test('scoring separates right, wrong, missed and extra detections',()=>{
   const cues=[{key:0,time:1000},{key:1,time:2000},{key:2,time:3000}];

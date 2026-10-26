@@ -35,7 +35,7 @@ Browser storage may be evicted or cleared. JSON backups contain audio samples; r
 
 Capture mode is hidden. Toggle it with `Control + Alt/Option + Shift + K`, or open `/kalimba?capture` on a phone. A "Capture mode" label appears under the instrument.
 
-- **Listening capture** (needs all nine keys): the microphone button starts a guided run. After the room check and a short count-in, one key lights up every second: each key upward and downward, then every pair of pitch neighbours four times (50 cues). Pluck each highlighted key once. Press the button again to finish early.
+- **Listening capture** (needs all nine keys): the microphone button starts a guided run. After the room check, a short message and a 3-2-1 countdown, one key lights up every two seconds, with the next key shown faintly: each key upward, each pair of pitch neighbours, then each key downward (34 cues, about 70 seconds). Pluck each highlighted key once. Press the button again to finish early. Replay scoring scales its timing window to the saved cue interval.
 - **Setup capture**: recording a key keeps the raw audio of that session. Finish is allowed before three plucks, so a failing setup can still be saved.
 - "Save capture" downloads one JSON file: raw microphone audio (16-bit WAV), cue times, what the app detected, the saved keys with their samples, and the browser's reported microphone processing settings. Nothing is uploaded.
 
