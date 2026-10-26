@@ -13,12 +13,16 @@ for(const frequency of [130.81,261.63,440,659.25,1046.5,1760]){
   });
 }
 test('silence does not become a note',()=>assert.equal(detectPitch(new Float32Array(2048),24000).frequency,null));
-test('ringing does not advance repeated notes; a fresh attack does',()=>{
+test('ringing does not advance repeated notes; a confirmed fresh attack does',()=>{
   const gate=new PluckGate();
   assert.ok(gate.update({frequency:440,rms:.1},0));
   assert.equal(gate.update({frequency:440,rms:.08},300),false);
   assert.equal(gate.update({frequency:440,rms:.04},600),false);
-  assert.ok(gate.update({frequency:440,rms:.1},900));
+  // While a note rings, a loudness jump alone is often a click or bump.
+  assert.equal(gate.update({frequency:440,rms:.1},900),false);
+  // An onset confirmed against the note itself counts, timed from its start.
+  assert.ok(gate.update({frequency:440,rms:.1},1100,.006,1000));
+  assert.equal(gate.onsetTime,1000);
 });
 test('a noisy attack can resolve to a pitched pluck shortly afterwards',()=>{
   const gate=new PluckGate();

@@ -26,18 +26,21 @@ export function detectPitch(samples,sampleRate,threshold=.006) {
   return {frequency:null,confidence:0,rms};
 }
 
-// Spectral-flux onsets (in the style of SuperFlux): sum the log rises of every
+// Spectral-flux bursts (in the style of SuperFlux): sum the log rises of every
 // band that stands above the room's own noise, against the louder of each
-// band's neighbours two hops ago. A re-pluck of a still-ringing tine barely
-// changes overall loudness, and can even cancel part of the fundamental, but it
-// revives the fast-decaying overtones and adds a contact click.
+// band's neighbours two hops ago. This finds new sound even while a tine rings,
+// but a click (a tap on the laptop, a nail on a tine, a hand bump) is a burst
+// too, so ListeningEngine confirms each one against the note itself.
 export class OnsetFlux {
   constructor(bins,binHz){
     this.low=Math.max(2,Math.ceil(80/binHz));this.high=Math.min(bins-2,Math.floor(10000/binHz));
     this.noise=new Float32Array(bins);this.noiseFrames=0;
     this.history=[];this.levels=[];this.active=false;
   }
-  learnNoise(spectrum){
+  // Microphones often start with a moment of digital silence; learning from it
+  // would make ordinary room noise look like new sound.
+  learnNoise(spectrum,rms){
+    if(!(rms>1e-5))return;
     this.noiseFrames++;
     for(let bin=this.low-1;bin<=this.high+1;bin++)this.noise[bin]+=(spectrum[bin]-this.noise[bin])/this.noiseFrames;
   }
@@ -53,12 +56,12 @@ export class OnsetFlux {
       const reference=Math.max(before[bin-1],before[bin],before[bin+1]);
       if(level[bin]>reference)flux+=level[bin]-reference;
     }
-    // Adaptive threshold: well above the recent median, and above an absolute
-    // floor so that beating and room noise never qualify on their own.
+    // Well above the recent median, and above an absolute floor: ringing in a
+    // real recording peaked near 4, real plucks scored 250 or more.
     const sorted=[...this.history].sort((a,b)=>a-b),median=sorted[Math.floor(sorted.length/2)]??0;
     // One attack spans several hops while it fills the 85 ms window; report
     // only the first frame of each burst.
-    const above=flux>Math.max(6,median*3),onset=above&&!this.active;
+    const above=flux>Math.max(15,median*3),onset=above&&!this.active;
     this.active=above;
     this.history.push(flux);if(this.history.length>12)this.history.shift();
     return {flux,onset};
@@ -67,11 +70,15 @@ export class OnsetFlux {
 
 export class PluckGate {
   constructor(){this.lastTime=-Infinity;this.lastFrequency=0;this.previous=0;this.quiet=true;this.pendingUntil=0;this.onsetTime=null;}
-  update({frequency,rms},time,threshold=.006,onset=false){
+  // onsetAt: start time of a confirmed spectral onset, or null.
+  update({frequency,rms},time,threshold=.006,onsetAt=null){
+    // From silence, rising loudness is enough. While a note rings, only a
+    // confirmed onset counts: loudness jumps there are often clicks or bumps.
     // The tail of an attack that already fired must not arm another pluck.
-    const rising=rms>threshold*1.5 && time-this.lastTime>=120 && (onset || this.quiet || rms>this.previous*1.65);
+    const onset=onsetAt!==null&&onsetAt!==undefined&&onsetAt-this.lastTime>=120;
+    const rising=rms>threshold*1.5 && time-this.lastTime>=120 && (onset || this.quiet);
     // Remember when the newest attack started, so a sample can be cut from it.
-    if(rising){if(time>=this.pendingUntil||this.onsetTime===null)this.onsetTime=time;this.pendingUntil=time+160;}
+    if(rising){if(time>=this.pendingUntil||this.onsetTime===null)this.onsetTime=onset?onsetAt:time;this.pendingUntil=time+160;}
     if(rms<threshold*.8) this.quiet=true;
     else if(rms>threshold*1.5) this.quiet=false;
     const fire=frequency && rms>threshold*1.5 && time-this.lastTime>=120 && time<this.pendingUntil;

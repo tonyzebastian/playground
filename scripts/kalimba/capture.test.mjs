@@ -49,5 +49,5 @@ test('a setup capture reports counted plucks and the calibration outcome',()=>{
   const report=replayCapture({format:CAPTURE_FORMAT,mode:'setup',key:2,outcome:'test',rate,createdAt:'test',plucks:[],keys:[],audio:dataUrl(audio)});
   assert.equal(report.plucks.length,3,report.lines.join('\n'));
   assert.ok(report.match.accepted);
-  assert.ok(report.lines.includes('calibration: would save'),report.lines.join('\n'));
+  assert.ok(report.lines.some(line=>line.startsWith('calibration: would save')),report.lines.join('\n'));
 });

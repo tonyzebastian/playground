@@ -60,7 +60,7 @@ export function replayCapture(capture){
     const tones=frames.filter(frame=>frame.frequency&&frame.confidence>.87).map(frame=>frame.frequency);
     const match=calibrationMatch(plucks);
     lines.push(`match: ${match.accepted?'accepted':'not accepted'} at ${match.frequency?.toFixed(1)} Hz (${noteName(match.midi)}), consistency ${match.match ?? '–'}%`);
-    try{analyseCalibration(tones,plucks);lines.push('calibration: would save');}catch(error){lines.push(`calibration: ${error.message}`);}
+    try{const saved=analyseCalibration(tones,plucks);lines.push(`calibration: would save ${saved.frequency.toFixed(1)} Hz (${noteName(saved.midi)}), the ringing pitch`);}catch(error){lines.push(`calibration: ${error.message}`);}
     Object.assign(report,{plucks,match});
     return report;
   }

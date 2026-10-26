@@ -208,7 +208,8 @@ export default function KalimbaApp({art}){
           if(match.accepted||capturePlucks.current.length>=6){
             captureReady.current=true;setCaptureHint(match.accepted?'Good match. Finishing…':'Checking your six plucks…');
             clearTimeout(captureTimer.current);
-            captureTimer.current=setTimeout(()=>finishRecording(token),250);
+            // Let the last pluck ring so its sample is long enough to learn from.
+            captureTimer.current=setTimeout(()=>finishRecording(token),match.accepted?1200:250);
           }
         }
       },undefined,[],{capture:captureOn});
@@ -230,12 +231,15 @@ export default function KalimbaApp({art}){
       const match=analyseCalibration(captureFrames.current,capturePlucks.current);
       const {midi,frequency}=match;
       assertUniqueKey({id:selected,midi,frequency},keys);
-      const chosen=capturePlucks.current[match.indexes[0]];
-      const following=capturePlucks.current[match.indexes[0]+1];
+      const plucks=capturePlucks.current;
       // onset marks the window in which the attack appeared; time is when pitch was confirmed.
       const at=pluck=>pluck.onset??pluck.time;
+      // Cut the sample from the matching pluck with the most ring before the
+      // next sound: preferably the first with ~1 s, else the longest.
+      const options=match.indexes.map(index=>({pluck:plucks[index],ring:plucks[index+1]?at(plucks[index+1])-at(plucks[index]):Infinity}));
+      const {pluck:chosen,ring}=options.find(option=>option.ring>=1000)??options.reduce((best,option)=>option.ring>best.ring?option:best);
       const startSeconds=Math.max(0,(at(chosen)-(chosen.onset!=null?60:120))/1000);
-      const duration=following?Math.min(1.5,(at(following)-at(chosen))/1000-.05):1.5;
+      const duration=Number.isFinite(ring)?Math.min(1.5,ring/1000-.05):1.5;
       const sample=await engine().sample(blob,{startSeconds,duration});
       if(token!==recordToken.current)return;
       setCandidate({id:selected,midi,frequency,match:match.match,profile:toneProfile(captureTones.current.filter(frame=>Math.abs(1200*Math.log2(frame.frequency/frequency))<=85)),blob:sample,recordedAt:new Date().toISOString()});
