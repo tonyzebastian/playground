@@ -33,7 +33,7 @@ export class KalimbaAudio {
     stream.getAudioTracks()[0].onended=()=>{this.stopListening();onEnd?.();};
     try{
       if(this.context.audioWorklet&&window.AudioWorkletNode){
-        if(!this.workletModule)this.workletModule=this.context.audioWorklet.addModule('/kalimba-audio/processor.js?v=5').catch(error=>{this.workletModule=null;throw error;});
+        if(!this.workletModule)this.workletModule=this.context.audioWorklet.addModule('/kalimba-audio/processor.js?v=6').catch(error=>{this.workletModule=null;throw error;});
         await this.workletModule;
         if(generation!==this.generation)return false;
         const input=this.context.createMediaStreamSource(stream);

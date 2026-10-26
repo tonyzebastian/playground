@@ -31,7 +31,7 @@ export default function KalimbaApp({art}){
   const [songId,setSongId]=useState(null),[step,setStep]=useState(0),[running,setRunning]=useState(false);
   const [playing,setPlaying]=useState(false),[tempo,setTempo]=useState(76),[mode,setMode]=useState('wait'),[loop,setLoop]=useState(false);
   const [hits,setHits]=useState(0),[finished,setFinished]=useState(false);
-  const [captureOn,setCaptureOn]=useState(false),[captureFile,setCaptureFile]=useState(null),[cueKey,setCueKey]=useState(null),[cueNext,setCueNext]=useState(null);
+  const [captureOn,setCaptureOn]=useState(false),[captureFile,setCaptureFile]=useState(null),[cueKey,setCueKey]=useState(null);
   const audio=useRef(null),timer=useRef(null),captureTimer=useRef(null),captureFrames=useRef([]),capturePlucks=useRef([]),captureTones=useRef([]),captureFinishing=useRef(false),captureReady=useRef(false),onHear=useRef(()=>{});
   const epoch=useRef(0),alive=useRef(true),recordToken=useRef(0),finishedRef=useRef(false);
   const fileInput=useRef(null),root=useRef(null),recordFocus=useRef(null);
@@ -47,7 +47,7 @@ export default function KalimbaApp({art}){
   const stop=useCallback(()=>{
     epoch.current++;recordToken.current++;clearTimeout(timer.current);clearTimeout(captureTimer.current);
     audio.current?.stopListening();audio.current?.stopPlayback();
-    captureFinish.current=null;setCueKey(null);setCueNext(null);
+    captureFinish.current=null;setCueKey(null);
     setListening(false);setPending(false);setRecording(false);setPlaying(false);setRunning(false);setSignal(0);
   },[]);
   useEffect(()=>{
@@ -139,8 +139,7 @@ export default function KalimbaApp({art}){
     if(!captureFile)return;
     const url=URL.createObjectURL(captureFile.blob),a=document.createElement('a');a.href=url;a.download=captureFile.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);
   }
-  // Guided capture: highlight one key every two seconds, showing the next one
-  // faintly so the player can get ready, and record raw audio alongside
+  // Guided capture: highlight one key every two seconds and record raw audio alongside
   // each cue's time, so recognition can be scored offline against what was asked.
   async function startCapture(){
     stop();setError('');setCaptureFile(null);setPending(true);
@@ -149,7 +148,7 @@ export default function KalimbaApp({art}){
     const finish=async()=>{
       if(token!==epoch.current)return;
       captureFinish.current=null;clearTimeout(timer.current);audio.current?.stopListening();
-      const raw=audio.current?.takeCapture();setListening(false);setCueKey(null);setCueNext(null);setSignal(0);
+      const raw=audio.current?.takeCapture();setListening(false);setCueKey(null);setSignal(0);
       if(!raw){setError('Nothing was captured. Please try again.');return;}
       setMessage('Preparing capture…');
       try{await saveCapture(raw,{mode:'listen',cueMs:CUE_MS,...log});if(token===epoch.current)setMessage(`Capture ready: ${log.cues.length} cues. Save it and share the file.`);}
@@ -157,9 +156,9 @@ export default function KalimbaApp({art}){
     };
     const cue=index=>{
       if(token!==epoch.current)return;
-      if(index>=cues.length){setCueKey(null);setCueNext(null);setMessage('Done. Let the last note ring…');timer.current=setTimeout(finish,1500);return;}
+      if(index>=cues.length){setCueKey(null);setMessage('Done. Let the last note ring…');timer.current=setTimeout(finish,1500);return;}
       const key=cues[index];log.cues.push({key,time:engine().captureClock()});
-      setCueKey(key);setCueNext(cues[index+1]??null);setMessage(`Capture ${index+1}/${cues.length} · pluck key ${key+1}`);
+      setCueKey(key);setMessage(`Capture ${index+1}/${cues.length} · pluck key ${key+1}`);
       timer.current=setTimeout(()=>cue(index+1),CUE_MS);
     };
     try{
@@ -169,7 +168,7 @@ export default function KalimbaApp({art}){
         if(result.checking){setMessage('Checking room noise. Keep quiet for a moment…');return;}
         if(result.pluck){log.detections.push(detection(result));if(Number.isInteger(result.keyId))animate(result.keyId);}
         if(!started){
-          started=true;setCueNext(cues[0]);setMessage('Get ready: pluck each highlighted key once, as it lights up. The faint one is next.');
+          started=true;setMessage('Get ready: pluck each highlighted key once, as soon as it lights up.');
           const count=n=>{if(token!==epoch.current)return;if(!n){cue(0);return;}setMessage(`Starting in ${n}… first key ${cues[0]+1}`);timer.current=setTimeout(()=>count(n-1),1000);};
           timer.current=setTimeout(()=>count(3),2500);
         }
@@ -303,7 +302,7 @@ export default function KalimbaApp({art}){
   // While capturing, only the capture's cues light up, never the song's.
   const capturing=!!captureFinish.current;
   const target=capturing?(cueKey??undefined):editing?selected:song&&!finished?sequence[step]?.key:undefined;
-  const upcoming=capturing?(cueNext??undefined):cueKey==null&&!editing&&song&&!finished?sequence[step+1]?.key:undefined;
+  const upcoming=capturing?undefined:cueKey==null&&!editing&&song&&!finished?sequence[step+1]?.key:undefined;
   const progress=sequence.length?(finished?100:step/sequence.length*100):0;
 
   return <main ref={root} className="kalimba-app" data-editing={editing||undefined}>
