@@ -94,6 +94,7 @@ src/
 │   └── unused/                   # Deprecated components kept unchanged
 ├── features/                     # Feature-owned UI and rendering code
 │   ├── gallery/
+│   ├── handwriting/              # Handwriting tool (write-on text, video export)
 │   ├── link-library/
 │   ├── pond-lab/
 │   ├── vision-reveal/
@@ -142,8 +143,10 @@ Interactive infinite canvas showcasing all projects:
 - **Experiences**: Fish school, World clock, Car configurator, Flock in Flight
 - **UI Interactions**: Interactive visual demos + chat interface
 - **SVG Animations**: Coin flip, Comet hero, Unlock
-- **Tools**: Drawing canvas and Mosaic Image Lab
+- **Tools**: Drawing canvas, Mosaic Image Lab and Handwriting
 - **Mosaic Image Lab**: One GPU editor for mosaic, dither, water, cursor, print, palette, and export controls
+
+- **Handwriting** (`/tools/handwriting`, `features/handwriting/`): type text and watch it get handwritten stroke by stroke. See "Handwriting Tool" below
 
 ### 3. Component Architecture
 - **Reusable**: Modular design with factory functions
@@ -193,6 +196,18 @@ const stop = createFrameLoop(canvas, (dt) => { /* draw */ });
 ```
 - Pauses while off-screen or the tab is hidden; `dt` is clamped seconds
 - Used by Grass; new experiments should use it instead of hand-rolling rAF + IntersectionObserver
+
+### Handwriting Tool (`features/handwriting/`)
+Type a line and it is handwritten one pen stroke at a time. Used to make text overlays for videos.
+- **Engine** (`engine/`): a plain-JS copy of the `HandWrite` engine in the Motion repo (`src/scenes/JunyStudios/shared/handwriting/`), with Remotion's helpers swapped for `engine/anim.js`. When the engine changes in Motion, port it here
+  - `geometry.js` lays out letters as pen strokes and builds the lead-in, tail and wobble
+  - `HandWrite.jsx` draws one line as SVG for a given (fractional) frame
+  - `fonts/` holds built-in fonts as stroke data
+  - `fontToStrokes.js` traces an uploaded `.ttf`/`.otf` into strokes in the browser (opentype.js)
+- **Studio** (`HandwritingStudio.jsx`): stage (1920×1080 canvas, scaled), text box, transport, and a DialKit panel configured in `handwritingConfig.js`
+- **Export to video**: the panel's **Export for video (.json)…** button saves the text and settings with `exportSettings()` in `handwritingConfig.js`. In the Motion repo, `npm run handwriting -- file.json` renders that as a transparent ProRes 4444 `.mov` for DaVinci Resolve (Motion's `docs/handwriting.md`)
+  - Keep `exportSettings()` keys in step with `handwritingClipSchema` in Motion's `HandwritingClip.tsx`
+- Timing is in 30 fps frames. Lead-ins go on the first line only and tails on the last line only; `variation` seeds their shapes (`line-<n>-v<variation>`)
 
 ### Split Panel (`features/gallery/`)
 - Every gallery card opens in a resizable right panel (`GalleryPanel`); below 900px it is a bottom sheet (`GallerySheet`)

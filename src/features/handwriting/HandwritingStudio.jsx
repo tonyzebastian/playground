@@ -6,7 +6,7 @@ import { Pause, Play, ArrowCounterClockwise } from "@phosphor-icons/react";
 import AppHeader from "@/components/shared/AppHeader";
 import { HandWrite } from "./engine/HandWrite";
 import { fontToStrokes } from "./engine/fontToStrokes";
-import { DEFAULT_TEXT, HANDWRITING_CONFIG, UPLOADED_FONT } from "./handwritingConfig";
+import { DEFAULT_TEXT, exportSettings, HANDWRITING_CONFIG, UPLOADED_FONT } from "./handwritingConfig";
 import styles from "./HandwritingStudio.module.css";
 
 const FPS = 30;
@@ -33,15 +33,44 @@ export default function HandwritingStudio() {
     noticeTimer.current = setTimeout(() => setNotice(""), 2600);
   }, []);
 
-  const handleAction = useCallback((path) => {
-    if (path === "type.uploadFont") fileRef.current?.click();
-  }, []);
+  // The panel's action buttons fire before this render's values are in
+  // scope, so the export reads the latest state through refs.
+  const latest = useRef({ text: DEFAULT_TEXT, customFont: null, values: null });
+
+  const downloadSettings = useCallback(() => {
+    const { text: current, customFont: font, values } = latest.current;
+    if (!values) return;
+    const settings = exportSettings(values, current, font);
+    const slug =
+      current
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "")
+        .slice(0, 40) || "text";
+    const blob = new Blob([JSON.stringify(settings, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `handwriting-${slug}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showNotice(`Saved handwriting-${slug}.json — render it in Motion with npm run handwriting`);
+  }, [showNotice]);
+
+  const handleAction = useCallback(
+    (path) => {
+      if (path === "type.uploadFont") fileRef.current?.click();
+      if (path === "export.download") downloadSettings();
+    },
+    [downloadSettings],
+  );
 
   const dial = useDialKitController("Handwriting", HANDWRITING_CONFIG, {
     id: "handwriting",
     onAction: handleAction,
   });
   const v = dial.values;
+  latest.current = { text, customFont, values: v };
 
   // A dropped or picked font file is traced into pen strokes here.
   const adoptFont = useCallback(
@@ -227,7 +256,8 @@ export default function HandwritingStudio() {
 
           <p className={styles.note}>
             Each letter is a pen path traced from a handwriting font. Pick a built-in font or drop any .ttf / .otf on the
-            stage; monoline scripts trace best. Space plays and pauses.
+            stage; monoline scripts trace best. Space plays and pauses. To use it in a video, press Export for video,
+            then run <code>npm run handwriting -- file.json</code> in the Motion repo for a transparent ProRes .mov.
           </p>
           <input
             ref={fileRef}
