@@ -98,6 +98,66 @@ export const HANDWRITING_CONFIG = {
     background: "#5e554d",
     shadow: true,
   },
+  // Saves the text and settings as JSON for the Motion repo, which renders
+  // a transparent ProRes 4444 .mov (npm run handwriting -- file.json).
+  export: {
+    _collapsed: false,
+    resolution: {
+      type: "select",
+      options: [
+        { value: "1920x1080", label: "1080p · 1920×1080" },
+        { value: "3840x2160", label: "4K · 3840×2160" },
+        { value: "2560x1440", label: "1440p · 2560×1440" },
+      ],
+      default: "1920x1080",
+    },
+    fps: {
+      type: "select",
+      options: [
+        { value: "24", label: "24 fps" },
+        { value: "25", label: "25 fps" },
+        { value: "30", label: "30 fps" },
+        { value: "60", label: "60 fps" },
+      ],
+      default: "30",
+    },
+    download: { type: "action", label: "Export for video (.json)…" },
+  },
 };
+
+// The settings file the Motion repo's HandwritingClip composition reads.
+// Keep the keys in step with its schema (handwriting/HandwritingClip.tsx).
+export function exportSettings(values, text, customFont) {
+  const [width, height] = values.export.resolution.split("x").map(Number);
+  const uploaded = values.type.font === UPLOADED_FONT && customFont;
+  return {
+    text,
+    font: uploaded ? "upload" : values.type.font === UPLOADED_FONT ? "reenieBeanie" : values.type.font,
+    fontData: uploaded ? customFont : null,
+    size: values.type.size,
+    weight: values.type.weight,
+    lineHeight: values.type.lineHeight,
+    align: values.type.align,
+    wordGap: values.timing.wordGap,
+    speed: values.timing.speed,
+    hold: values.timing.hold,
+    exit: values.timing.exit,
+    connect: values.pen.connect,
+    wordConnect: values.pen.wordConnect,
+    lead: values.pen.lead,
+    leadStyle: values.pen.leadStyle,
+    tail: values.pen.tail,
+    tailStyle: values.pen.tailStyle,
+    variation: values.pen.variation,
+    wiggle: values.wobble.wiggle,
+    boil: values.wobble.boil,
+    texture: values.wobble.texture,
+    ink: values.colors.ink,
+    shadow: values.colors.shadow,
+    width,
+    height,
+    fps: Number(values.export.fps),
+  };
+}
 
 export const DEFAULT_TEXT = "For a while now,\nI’ve been getting\nmore curious about stories.";
