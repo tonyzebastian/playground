@@ -7,14 +7,6 @@ export const UPLOADED_FONT = "upload";
 export const HANDWRITING_CONFIG = {
   type: {
     _collapsed: false,
-    look: {
-      type: "select",
-      options: [
-        { value: "write", label: "Write · pen draws each letter" },
-        { value: "blob", label: "Blob · each word morphs out of ink" },
-      ],
-      default: "write",
-    },
     font: {
       type: "select",
       options: [
@@ -44,8 +36,6 @@ export const HANDWRITING_CONFIG = {
     wordGap: [6, 1, 30, 1],
     // Pen speed, px per frame.
     speed: [190, 20, 600, 5],
-    // Blob look: frames for a word to form.
-    morphFrames: [16, 4, 60, 1],
     // Frames the text stays after the last word, before it leaves.
     hold: [40, 0, 200, 1],
     exit: {
@@ -60,14 +50,39 @@ export const HANDWRITING_CONFIG = {
     loop: true,
   },
   pen: {
-    _collapsed: true,
+    _collapsed: false,
     // Ink on the joins between letters / words. 0 = each letter on its own.
     connect: [0, 0, 1, 0.05],
     wordConnect: [0, 0, 1, 0.05],
-    // Swoop into the first letter and out of the last, in em.
-    lead: [0, 0, 3, 0.05],
-    tail: [0, 0, 4, 0.05],
-    tailDrop: [0, -1, 1, 0.05],
+    // Swoop into the first letter (first line only), about this long in em.
+    lead: [0.6, 0, 3, 0.05],
+    leadStyle: {
+      type: "select",
+      options: [
+        { value: "auto", label: "Auto" },
+        { value: "swoop", label: "Swoop · up from the lower left" },
+        { value: "line", label: "Line · straight run-in" },
+        { value: "hook", label: "Hook · rises from below" },
+        { value: "wave", label: "Wave" },
+      ],
+      default: "auto",
+    },
+    // Flourish after the last word (last line only), about this long in em.
+    tail: [1, 0, 4, 0.05],
+    tailStyle: {
+      type: "select",
+      options: [
+        { value: "auto", label: "Auto" },
+        { value: "flick", label: "Flick" },
+        { value: "lift", label: "Lift · up and away" },
+        { value: "drop", label: "Drop · down and away" },
+        { value: "wave", label: "Wave" },
+        { value: "swash", label: "Swash · back under the word" },
+      ],
+      default: "auto",
+    },
+    // Re-rolls the lead and tail shapes and lengths.
+    variation: [1, 1, 100, 1],
   },
   wobble: {
     _collapsed: true,

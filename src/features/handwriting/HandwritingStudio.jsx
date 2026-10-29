@@ -86,21 +86,18 @@ export default function HandwritingStudio() {
     if (!playing) return undefined;
     let raf = 0;
     let last = performance.now();
-    let acc = 0;
     const tick = (now) => {
-      acc += ((now - last) / 1000) * FPS;
+      // Advance by fractions of a frame so fast pens still move smoothly on
+      // high refresh-rate screens (the timeline is still in 30 fps frames).
+      const step = Math.min(((now - last) / 1000) * FPS, 2);
       last = now;
-      if (acc >= 1) {
-        const step = Math.floor(acc);
-        acc -= step;
-        setFrame((f) => {
-          const next = f + step;
-          if (next < duration) return next;
-          if (v.timing.loop) return 0;
-          setPlaying(false);
-          return duration;
-        });
-      }
+      setFrame((f) => {
+        const next = f + step;
+        if (next < duration) return next;
+        if (v.timing.loop) return 0;
+        setPlaying(false);
+        return duration;
+      });
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -166,21 +163,20 @@ export default function HandwritingStudio() {
                   align={v.type.align}
                   size={size}
                   font={font}
-                  look={v.type.look}
-                  morphFrames={v.timing.morphFrames}
                   color={v.colors.ink}
                   weight={v.type.weight > 0 ? v.type.weight : undefined}
                   speed={v.timing.speed}
                   connect={v.pen.connect}
                   wordConnect={v.pen.wordConnect}
-                  lead={v.pen.lead}
-                  tail={{ length: v.pen.tail, drop: v.pen.tailDrop }}
+                  lead={i === 0 ? v.pen.lead : 0}
+                  leadStyle={v.pen.leadStyle}
+                  tail={{ length: i === lines.length - 1 ? v.pen.tail : 0, style: v.pen.tailStyle }}
                   wiggle={v.wobble.wiggle}
                   boil={v.wobble.boil}
                   texture={v.wobble.texture}
                   exit={exit}
                   shadow={v.colors.shadow ? undefined : "drop-shadow(0 0 0 transparent)"}
-                  seed={`line-${i}`}
+                  seed={`line-${i}-v${v.pen.variation}`}
                 />
               ))}
             </div>
@@ -211,7 +207,7 @@ export default function HandwritingStudio() {
               aria-label="Timeline"
             />
             <span className={styles.time}>
-              {Math.min(frame, duration)} / {duration}
+              {Math.floor(Math.min(frame, duration))} / {duration}
             </span>
           </div>
 

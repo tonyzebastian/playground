@@ -90,7 +90,7 @@ export const layoutWords = (font, words, size, tracking, wordGap) => {
         for (let i = 0; i < flat.length; i += 2) {
           pts.push({ x: ox + flat[i] * s, y: -flat[i + 1] * s });
         }
-        strokes.push(resample(soften(pts, 2), step));
+        strokes.push({ ...resample(soften(pts, 2), step), ch });
       }
       x += (maxX - minX) * s;
       if (ci < word.length - 1)
@@ -147,6 +147,46 @@ export const ribbon = (stroke, from, to, widthAt, offsetAt) => {
   }
   return `M ${left.join(" L ")} L ${right.reverse().join(" L ")} Z`;
 };
+const wrap = (a) => {
+  let x = a;
+  while (x > Math.PI)
+    x -= Math.PI * 2;
+  while (x <= -Math.PI)
+    x += Math.PI * 2;
+  return x;
+};
+// Punctuation that the pen adds after the flourish, so the flourish grows
+// out of the last letter rather than out of a full stop.
+const TRAILING = new Set([".", ",", "!", "?", ";", ":", "'", "’", "\"", "”"]);
+// A pen path from `start`, heading `angle` (radians, y down), turning by
+// `curve(s)` radians per px as it goes.
+const arc = (start, angle, length, curve, step) => {
+  const out = [start];
+  let th = angle;
+  let p = start;
+  const n = Math.max(2, Math.ceil(length / step));
+  const ds = length / n;
+  for (let i = 1; i <= n; i++) {
+    th += curve(i * ds) * ds;
+    p = { x: p.x + Math.cos(th) * ds, y: p.y + Math.sin(th) * ds };
+    out.push(p);
+  }
+  return out;
+};
+// How much the line is turning at its end, radians per px.
+const endCurve = (pts) => {
+  if (pts.length < 12)
+    return 0;
+  const a = endDir(pts);
+  const b = endDir(pts.slice(0, pts.length - 6));
+  const d = Math.hypot(pts[pts.length - 1].x - pts[pts.length - 7].x, pts[pts.length - 1].y - pts[pts.length - 7].y) || 1;
+  let turn = Math.atan2(a.y, a.x) - Math.atan2(b.y, b.x);
+  if (turn > Math.PI)
+    turn -= Math.PI * 2;
+  if (turn < -Math.PI)
+    turn += Math.PI * 2;
+  return turn / d;
+};
 const cubic = (a, b, c, d, n) => {
   const out = [];
   for (let i = 0; i <= n; i++) {
@@ -199,15 +239,57 @@ export const buildTrack = (words, size, opt) => {
   if (all.length === 0) {
     return { pts: [{ x: 0, y: 0 }, { x: 1, y: 0 }], at: [0, 1], length: 1, join: [0, 0], wordStart: [], wordEnd: [], textEnd: 1, tailLength: 0, time: [0, 1], duration: 1 };
   }
-  // Lead-in: a short line sweeping in from the left into the first stroke.
+  const rnd = (k) => random(`${opt.seed}-${k}`);
+  // Lead-in: the pen arrives already moving and runs straight on into the
+  // first stroke (no gap), so it reads as part of the letter.
   const first = all[0].s.pts;
-  if (opt.lead > 0) {
+  let leadJoined = false;
+  if (opt.lead.length > 0) {
+    const L = opt.lead.length * size * (0.6 + 0.8 * rnd("lead-len"));
     const p = first[0];
-    pts.push({ x: p.x - opt.lead * size, y: p.y + size * 0.08 });
-    join.push(1);
-    pts.push({ x: p.x - opt.lead * size * 0.98, y: p.y + size * 0.08 });
-    join.push(1);
-    bridge(first, 1);
+    const d = startDir(first);
+    // Rightwards, leaning into the stroke.
+    const arrive = unit(d.x + 1.3, d.y);
+    let style = opt.lead.style ?? "auto";
+    if (style === "auto") {
+      const r = rnd("lead-style");
+      style = r < 0.35 ? "swoop" : r < 0.6 ? "line" : r < 0.85 ? "hook" : "wave";
+    }
+    const n = Math.max(6, Math.ceil((L * 1.3) / step));
+    let curve;
+    if (style === "line") {
+      const tilt = (rnd("line-tilt") - 0.35) * 0.25;
+      const bow = (rnd("line-bow") - 0.5) * L * 0.12;
+      const s0 = { x: p.x - L, y: p.y + L * tilt };
+      curve = cubic(s0, { x: s0.x + L * 0.35, y: s0.y + bow }, { x: p.x - arrive.x * L * 0.35, y: p.y - arrive.y * L * 0.35 + bow }, p, n);
+    }
+    else if (style === "hook") {
+      // From below, ending tangent to the stroke itself.
+      const s0 = { x: p.x - L * (0.35 + 0.35 * rnd("hook-x")), y: p.y + L * (0.4 + 0.4 * rnd("hook-y")) };
+      curve = cubic(s0, { x: s0.x + L * 0.1, y: s0.y + L * 0.12 }, { x: p.x - d.x * L * 0.5, y: p.y - d.y * L * 0.5 }, p, n);
+    }
+    else if (style === "wave") {
+      const amp = L * (0.15 + 0.2 * rnd("wave-amp")) * (rnd("wave-sign") < 0.5 ? -1 : 1);
+      const s0 = { x: p.x - L * 1.1, y: p.y + L * 0.1 * rnd("wave-y") };
+      curve = cubic(s0, { x: s0.x + L * 0.4, y: s0.y - amp }, { x: p.x - arrive.x * L * 0.45, y: p.y - arrive.y * L * 0.45 + amp }, p, n);
+    }
+    else {
+      // Swoop up from the lower left.
+      const s0 = { x: p.x - L, y: p.y + L * (0.05 + 0.45 * rnd("lead-drop")) };
+      const sag = L * (-0.1 + 0.35 * rnd("lead-sag"));
+      curve = cubic(s0, { x: s0.x + L * 0.45, y: s0.y + sag }, { x: p.x - arrive.x * L * 0.4, y: p.y - arrive.y * L * 0.4 }, p, n);
+    }
+    push(curve, 1);
+    leadJoined = true;
+  }
+  // Trailing punctuation of the last word waits until after the flourish.
+  const trailing = [];
+  if (opt.tail.length > 0) {
+    while (all.length > 1 && all[all.length - 1].wi === words.length - 1 && TRAILING.has(all[all.length - 1].s.ch ?? "")) {
+      trailing.unshift(all.pop());
+    }
+    if (trailing.length)
+      all[all.length - 1].last = true;
   }
   let lifted = false;
   for (const item of all) {
@@ -219,7 +301,12 @@ export const buildTrack = (words, size, opt) => {
       const forward = b.x - a.x > -size * 0.04 && Math.abs(b.y - a.y) < size * 0.45;
       // After a dot or crossbar the pen lifts again, back to the main line.
       const between = item.si === 0;
-      const ink = forward && !lifted ? (between ? opt.wordConnect : opt.connect) : 0;
+      let ink = forward && !lifted ? (between ? opt.wordConnect : opt.connect) : 0;
+      // The lead-in flows straight into the first stroke.
+      if (leadJoined) {
+        ink = 1;
+        leadJoined = false;
+      }
       bridge(item.s.pts, ink);
       lifted = ink === 0 && !between && opt.connect > 0;
     }
@@ -230,14 +317,80 @@ export const buildTrack = (words, size, opt) => {
       marks.push({ word: item.wi, kind: "end", index: pts.length - 1 });
   }
   const textEndIndex = pts.length - 1;
-  // Flourish: carry on past the last letter, then curl away.
+  // Flourish after the last letter. It grows out of the last stroke (same
+  // direction, same bend) with no gap, and its shape and length vary with
+  // the seed.
   if (opt.tail.length > 0) {
     const a = pts[pts.length - 1];
-    const t = endDir(pts);
-    const L = opt.tail.length * size;
-    const end = { x: a.x + L, y: a.y + opt.tail.drop * size };
-    const curve = cubic(a, { x: a.x + t.x * L * 0.3, y: a.y + t.y * L * 0.3 }, { x: end.x - L * 0.45, y: end.y - size * 0.05 }, end, Math.max(4, Math.ceil(L / step)));
-    push(curve, 1);
+    const dir = endDir(pts);
+    const angle = Math.atan2(dir.y, dir.x);
+    const k0 = Math.max(-1.5 / size, Math.min(1.5 / size, endCurve(pts)));
+    const L = opt.tail.length * size * (0.6 + 0.8 * rnd("tail-len"));
+    const lastWord = words[words.length - 1];
+    let style = opt.tail.style ?? "auto";
+    if (style === "auto") {
+      const r = rnd("tail-style");
+      if (dir.y > 0.6)
+        style = r < 0.4 ? "drop" : r < 0.7 ? "flick" : "swash";
+      else if (dir.x < 0.3)
+        style = r < 0.5 ? "swash" : r < 0.75 ? "lift" : "wave";
+      else
+        style = r < 0.3 ? "flick" : r < 0.5 ? "lift" : r < 0.7 ? "wave" : "swash";
+    }
+    // Turn from `angle` to `target` over `turnLen` px, then follow `rest`.
+    const steer = (target, turnLen, rest) => {
+      const turn = wrap(target - angle);
+      return (s) => (s < turnLen ? turn / turnLen : rest(s - turnLen));
+    };
+    let path;
+    if (style === "swash") {
+      // Turn down and round (clockwise on screen) until heading back left,
+      // then sweep back under the word, often hooking up at the end.
+      let turn = wrap(Math.PI * (1 + 0.08 * (rnd("swash-ang") - 0.5)) - angle);
+      if (turn < -0.5)
+        turn += Math.PI * 2;
+      if (turn > Math.PI * 1.5)
+        turn -= Math.PI * 2;
+      const tight = size * (0.18 + 0.27 * rnd("swash-r"));
+      const under = Math.max(size * 0.6, Math.min(lastWord.width * (0.35 + 0.7 * rnd("swash-w")), size * 5)) * (L / size);
+      const bow = (-0.25 + 0.35 * rnd("swash-bow")) / size;
+      const hook = rnd("swash-hook") < 0.55 ? (0.4 + 1.1 * rnd("swash-hook-amt")) : 0;
+      const hookLen = under * 0.2;
+      path = arc(a, angle, tight + under, (s) => {
+        if (s < tight)
+          return turn / tight;
+        if (s > tight + under - hookLen)
+          return bow + hook / hookLen;
+        return bow;
+      }, step);
+    }
+    else if (style === "lift" || style === "drop") {
+      const up = style === "lift";
+      const target = up ? -(0.3 + 0.7 * rnd("lift-ang")) : 0.45 + 0.7 * rnd("drop-ang");
+      const len = L * (0.5 + 0.6 * rnd("lift-len"));
+      const turnLen = len * (0.25 + 0.4 * rnd("lift-turn"));
+      const after = (rnd("lift-bend") - 0.5) * 0.8;
+      path = arc(a, angle, len, steer(target, turnLen, () => after / len), step);
+    }
+    else if (style === "wave") {
+      const len = L * (0.9 + 0.7 * rnd("wave-len"));
+      const turnLen = len * 0.15;
+      const lambda = len * (0.4 + 0.4 * rnd("wave-l"));
+      const amp = (0.35 + 0.45 * rnd("wave-a")) * (rnd("wave-s") < 0.5 ? -1 : 1);
+      path = arc(a, angle, len, steer((rnd("wave-dir") - 0.5) * 0.4, turnLen, (s) => amp * ((Math.PI * 2) / lambda) * Math.cos((Math.PI * 2 * s) / lambda)), step);
+    }
+    else {
+      // Flick: keep going, bending more or less, and lift off.
+      const len = L * (0.45 + 0.75 * rnd("flick-len"));
+      const bend = (rnd("flick-bend") - 0.5) * 1.6;
+      path = arc(a, angle, len, () => k0 * 0.6 + bend / len, step);
+    }
+    push(path, 1);
+  }
+  // The punctuation held back from the last word.
+  for (const item of trailing) {
+    bridge(item.s.pts, 0);
+    push(item.s.pts, 1);
   }
   // Distances along the line.
   const at = [0];
@@ -355,4 +508,49 @@ export const makeWobble = (seed, boil, period, amp) => {
     x: amp * (Math.sin(s * f1 + p1) * 0.7 + Math.sin(s * f2 + p3) * 0.3),
     y: amp * (Math.cos(s * f1 * 0.9 + p2) * 0.7 + Math.sin(s * f2 * 1.1 + p1) * 0.3),
   });
+};
+// Smooth, never-backwards curve through keyframes (monotone cubic,
+// Fritsch–Carlson). Used for the pen's progress so it speeds up and slows
+// down between words instead of jerking from one speed to another.
+export const smoothKeys = (x, xs, ys) => {
+  const n = xs.length;
+  if (n === 0)
+    return 0;
+  if (x <= xs[0])
+    return ys[0];
+  if (x >= xs[n - 1])
+    return ys[n - 1];
+  const d = [];
+  for (let i = 0; i < n - 1; i++)
+    d.push((ys[i + 1] - ys[i]) / Math.max(1e-6, xs[i + 1] - xs[i]));
+  const m = [d[0]];
+  for (let i = 1; i < n - 1; i++)
+    m.push(d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2);
+  m.push(d[n - 2]);
+  for (let i = 0; i < n - 1; i++) {
+    if (d[i] === 0) {
+      m[i] = 0;
+      m[i + 1] = 0;
+      continue;
+    }
+    const a = m[i] / d[i];
+    const b = m[i + 1] / d[i];
+    const h = a * a + b * b;
+    if (h > 9) {
+      const t = 3 / Math.sqrt(h);
+      m[i] = t * a * d[i];
+      m[i + 1] = t * b * d[i];
+    }
+  }
+  let i = 0;
+  while (i < n - 2 && x > xs[i + 1])
+    i++;
+  const hx = xs[i + 1] - xs[i];
+  const t = (x - xs[i]) / hx;
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return ((2 * t3 - 3 * t2 + 1) * ys[i] +
+    (t3 - 2 * t2 + t) * hx * m[i] +
+    (-2 * t3 + 3 * t2) * ys[i + 1] +
+    (t3 - t2) * hx * m[i + 1]);
 };

@@ -3,14 +3,14 @@
 import React, { useId, useMemo } from "react";
 import { bezier, interpolate } from "./anim";
 import { HAND_FONTS } from "./fonts";
-import { buildTrack, distanceAtTime, layoutWords, makeWobble, ribbon, sampleAt, smoothstep } from "./geometry";
+import { buildTrack, distanceAtTime, layoutWords, makeWobble, ribbon, sampleAt, smoothKeys, smoothstep, } from "./geometry";
 const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" };
 const penEase = bezier(0.45, 0, 0.55, 1);
 // A line of handwriting drawn as one continuous stroke, like a path being
 // trimmed open in Figma: the pen sweeps in, forms each letter, runs out
 // past the last one into a flourish, wiggles while it sits, and leaves the
 // way it came — its start chasing the end — or dissolves.
-export const HandWrite = ({ look = "write", morphFrames = 16, words, x, y, align = "left", size, font = "felix", color = "#FFFFFF", weight, speed, tracking, wordGap = 0.9, connect, wordConnect = 0, lead = 0.5, tail = { length: 0.9, drop: 0.12 }, wiggle = 1, boil = 3, texture = 1, exit, shadow = "drop-shadow(0 0 6px rgba(20,12,10,0.55)) drop-shadow(0 3px 10px rgba(20,12,10,0.35))", seed = "hand", frame, }) => {
+export const HandWrite = ({ words, x, y, align = "left", size, font = "felix", color = "#FFFFFF", weight, speed, tracking, wordGap = 0.9, connect, wordConnect = 0, lead = 0.5, leadStyle = "auto", tail = { length: 0.9, style: "auto" }, wiggle = 1, boil = 3, texture = 1, exit, shadow = "drop-shadow(0 0 6px rgba(20,12,10,0.55)) drop-shadow(0 3px 10px rgba(20,12,10,0.35))", seed = "hand", frame, }) => {
   const filterId = `hw-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   // A built-in font name, or a font object (for example one converted from an upload).
   const hand = typeof font === "string" ? HAND_FONTS[font] ?? HAND_FONTS.reenieBeanie : font;
@@ -20,7 +20,13 @@ export const HandWrite = ({ look = "write", morphFrames = 16, words, x, y, align
   const joins = connect ?? (traced ? 1 : 0.55);
   const texts = words.map((w) => w.text).join("\u0000");
   const layout = useMemo(() => layoutWords(hand, texts.split("\u0000"), size, letterGap, wordGap), [hand, texts, size, letterGap, wordGap]);
-  const track = useMemo(() => buildTrack(layout.words, size, { connect: joins, wordConnect, lead, tail }), [layout, size, joins, wordConnect, lead, tail.length, tail.drop]);
+  const track = useMemo(() => buildTrack(layout.words, size, {
+    connect: joins,
+    wordConnect,
+    lead: { length: lead, style: leadStyle },
+    tail,
+    seed: `${seed}-${texts}`,
+  }), [layout, size, joins, wordConnect, lead, leadStyle, tail.length, tail.style, seed, texts]);
   const pen = speed ?? size * 1.1;
   const fast = pen * 2.5;
   // When the pen reaches each point: on time for each spoken word, never
@@ -34,7 +40,8 @@ export const HandWrite = ({ look = "write", morphFrames = 16, words, x, y, align
       d.push(dist);
     };
     const first = track.wordStart[0] ?? 0;
-    add(words[0].frame - first / fast, 0);
+    // The lead-in is drawn at a brisk pen speed, landing on the first word.
+    add(words[0].frame - first / (pen * 1.3), 0);
     track.wordStart.forEach((start, i) => {
       if (i > 0) {
         const prevEnd = track.wordEnd[i - 1];
@@ -49,13 +56,10 @@ export const HandWrite = ({ look = "write", morphFrames = 16, words, x, y, align
     add(f[f.length - 1] + (track.duration - track.textEnd) / (pen * 1.1), track.duration);
     return { f, d };
   }, [track, words, pen, fast]);
-  if (look === "blob") {
-    return (<BlobWords layout={layout} words={words} frame={frame} x={x} y={y} align={align} size={size} color={color} stroke={size * (weight ?? hand.stem ?? 0.05)} morphFrames={morphFrames} wiggle={wiggle} boil={boil} texture={texture} exit={exit} shadow={shadow} seed={seed} filterId={filterId}/>);
-  }
   if (frame < keys.f[0])
     return null;
   // Keyframes are in pen time; convert to distance along the line.
-  const head = distanceAtTime(track, interpolate(frame, keys.f, keys.d, clamp));
+  const head = distanceAtTime(track, smoothKeys(frame, keys.f, keys.d));
   let from = 0;
   let opacity = 1;
   let blur = 0;
@@ -115,83 +119,5 @@ export const HandWrite = ({ look = "write", morphFrames = 16, words, x, y, align
      </filter>
     </defs>)}
    <path d={d} fill={color} filter={texture > 0 ? `url(#${filterId})` : undefined}/>
-  </svg>);
-};
-const morphEase = bezier(0.2, 0.8, 0.3, 1);
-// The "blob" look: each word starts as a drop of ink and pulls itself into
-// its letters. Done with a goo filter: the strokes are drawn fat and blurred,
-// then the edge is sharpened back up, so nearby ink melts into one shape.
-// As the blur and the extra weight go away, the letters separate out.
-const BlobWords = ({ layout, words, frame, x, y, align, size, color, stroke, morphFrames, wiggle, boil, texture, exit, shadow, seed, filterId }) => {
-  const boilStep = Math.floor(frame / boil);
-  const dx = align === "left" ? 0 : align === "right" ? -layout.width : -layout.width / 2;
-  const defs = [];
-  const groups = [];
-  layout.words.forEach((word, wi) => {
-    const start = words[wi].frame;
-    if (frame < start || word.strokes.length === 0)
-      return;
-    let p = interpolate(frame, [start, start + morphFrames], [0, 1], { ...clamp, easing: morphEase });
-    let opacity = 1;
-    if (exit) {
-      const at = exit.frame + wi * 2;
-      if (exit.type === "unwrite") {
-        // Melt back into a blob and shrink away.
-        const q = interpolate(frame, [at, at + morphFrames * 0.8], [0, 1], { ...clamp, easing: penEase });
-        if (q >= 1)
-          return;
-        p = Math.min(p, 1 - q);
-        opacity = interpolate(q, [0.6, 1], [1, 0], clamp);
-      }
-      else {
-        const q = interpolate(frame, [at, at + (exit.frames ?? 14)], [0, 1], clamp);
-        if (q >= 1)
-          return;
-        opacity = 1 - q;
-      }
-    }
-    opacity *= interpolate(p, [0, 0.15], [0, 1], clamp);
-    const melt = 1 - p;
-    const blur = size * 0.11 * melt;
-    const fat = 1 + 3.2 * melt;
-    // The blob grows out of the middle of the word.
-    const cx = word.x + word.width / 2;
-    const cy = -size * 0.15;
-    const scale = 0.35 + 0.65 * p;
-    const offsetAt = makeWobble(`${seed}-${wi}`, boilStep, size * 0.8, size * 0.007 * wiggle);
-    const d = word.strokes
-      .map((st, si) => {
-      const pressureA = si * 1.7;
-      return ribbon(st, 0, st.length, (s) => {
-        const ends = 0.35 + 0.65 * smoothstep(0, Math.min(size * 0.06, st.length * 0.25), Math.min(s, st.length - s));
-        const pressure = 0.88 + 0.24 * Math.sin(s / (size * 0.4) + pressureA);
-        return stroke * fat * pressure * (melt > 0.02 ? 1 : ends);
-      }, offsetAt);
-    })
-      .join(" ");
-    const goo = `${filterId}-goo${wi}`;
-    if (melt > 0.01) {
-      defs.push(<filter key={goo} id={goo} x="-60%" y="-120%" width="220%" height="340%">
-     <feGaussianBlur in="SourceGraphic" stdDeviation={blur.toFixed(2)} result="b"/>
-     <feColorMatrix in="b" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -9"/>
-    </filter>);
-    }
-    groups.push(<g key={wi} opacity={opacity} transform={`translate(${cx.toFixed(2)} ${cy.toFixed(2)}) scale(${scale.toFixed(4)}) translate(${(-cx).toFixed(2)} ${(-cy).toFixed(2)})`}>
-    <g filter={melt > 0.01 ? `url(#${goo})` : undefined}>
-     <path d={d} fill={color}/>
-    </g>
-   </g>);
-  });
-  if (groups.length === 0)
-    return null;
-  return (<svg width={1} height={1} style={{ position: "absolute", left: x + dx, top: y, overflow: "visible", filter: shadow }}>
-   <defs>
-    {texture > 0 && (<filter id={filterId} x="-10%" y="-60%" width="120%" height="220%">
-      <feTurbulence type="fractalNoise" baseFrequency={0.9} numOctaves={2} seed={boilStep % 97} result="n"/>
-      <feDisplacementMap in="SourceGraphic" in2="n" scale={size * 0.02 * texture}/>
-     </filter>)}
-    {defs}
-   </defs>
-   <g filter={texture > 0 ? `url(#${filterId})` : undefined}>{groups}</g>
   </svg>);
 };
