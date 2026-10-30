@@ -125,12 +125,24 @@ export const HANDWRITING_CONFIG = {
   },
 };
 
+// Sits at the top of every export, so the file can simply be handed over
+// (to Claude, say) and rendered without any other explanation.
+const EXPORT_INSTRUCTIONS = [
+  "Handwriting clip settings exported from the playground Handwriting tool (play.tonyzeb.com/tools/handwriting).",
+  "To make the video, render this file right away, no questions needed: in the Motion repo (~/Desktop/Personal/Code/Motion) run",
+  "  npm run handwriting -- <path to this file>",
+  "That writes a transparent ProRes 4444 .mov to out/handwriting/<this file's name>.mov, ready to drop above footage in DaVinci Resolve.",
+  "Add --png for a transparent PNG sequence instead. Details: docs/handwriting.md in the Motion repo.",
+].join("\n");
+
 // The settings file the Motion repo's HandwritingClip composition reads.
 // Keep the keys in step with its schema (handwriting/HandwritingClip.tsx).
 export function exportSettings(values, text, customFont) {
   const [width, height] = values.export.resolution.split("x").map(Number);
   const uploaded = values.type.font === UPLOADED_FONT && customFont;
   return {
+    // Read by whoever (or whatever agent) is handed this file.
+    instructions: EXPORT_INSTRUCTIONS,
     text,
     font: uploaded ? "upload" : values.type.font === UPLOADED_FONT ? "reenieBeanie" : values.type.font,
     fontData: uploaded ? customFont : null,
