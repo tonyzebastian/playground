@@ -207,6 +207,7 @@ Type a line and it is handwritten one pen stroke at a time. Used to make text ov
 - **Studio** (`HandwritingStudio.jsx`): stage (1920×1080 canvas, scaled), text box, transport, and a DialKit panel configured in `handwritingConfig.js`
 - **Export to video**: the panel's **Export for video (.json)…** button saves the text and settings with `exportSettings()` in `handwritingConfig.js`. In the Motion repo, `npm run handwriting -- file.json` renders that as a transparent ProRes 4444 `.mov` for DaVinci Resolve (Motion's `docs/handwriting.md`)
   - Keep `exportSettings()` keys in step with `handwritingClipSchema` in Motion's `HandwritingClip.tsx`
+  - Every export starts with an `instructions` field (`EXPORT_INSTRUCTIONS`) saying how to render it, so the file can be handed to an agent and rendered straight away; Motion's AGENTS.md has the matching rule
 - Timing is in 30 fps frames. Lead-ins go on the first line only and tails on the last line only; `variation` seeds their shapes (`line-<n>-v<variation>`)
 
 ### Split Panel (`features/gallery/`)
