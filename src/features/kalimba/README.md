@@ -7,7 +7,7 @@ Standalone static route: `/kalimba`. One instrument-centred screen, designed for
 - First visit: load existing IndexedDB keys with no tine selected. Tap a key to highlight its full length and open an accessible recording dialog: a bottom sheet on phones and a centred modal on desktop. The dialog shows the key, saved note, input wave, capture indicators, and pitch-consistency feedback. Dismissing it stops capture and clears selection.
 - Save & next stores a key before advancing to the next missing key in the same dialog. Saving the final missing key automatically chooses the first playable starter song; if none fits, it opens Free play. It never autoplays or starts another microphone session.
 - Returning visit: restore the recorded instrument and last chosen song or Free play. Tempo, looping, and practice mode are also remembered under `kalimba-preferences-v2` in localStorage.
-- The song picker is the only main control outside the face. Listening, demonstration playback, and restart are on the instrument. Settings is in the header; setup progress is above the instrument and in the recording dialog. Free play uses the same face without song cues.
+- Below the instrument, in order: a live sound wave, the song picker, then play/pause for the melody, the microphone, and restart. Song progress is the button's outline filling clockwise: on play/pause while the melody plays (pausing keeps its place), and on the microphone, which turns light while listening, during practice. A paused melody never moves where practice starts. The wave (`ListeningWave.jsx`, a canvas on the shared frame loop) breathes while listening and swells with the microphone level. Settings is a labelled button in the header; setup progress is above the instrument and in the recording dialog. Free play uses the same face without song cues.
 - Settings contains key editing, practice options, and backup/restore. Key editing preserves the old recording until its replacement is accepted. Record all keys walks through all nine even when they already have saved recordings.
 - Dialog sheets use Radix for focus trapping, Escape handling, and accessible titles.
 
@@ -33,7 +33,7 @@ Browser storage may be evicted or cleared. JSON backups contain audio samples; r
 
 ## Accuracy captures
 
-Capture mode is hidden. Toggle it with `Control + Alt/Option + Shift + K`, or open `/kalimba?capture` on a phone. A "Capture mode" label appears under the instrument.
+Turn capture mode on with the Capture mode switch in Settings, `Control + Alt/Option + Shift + K`, or `/kalimba?capture`. A "Capture mode" label appears under the instrument.
 
 - **Listening capture** (needs all nine keys): the microphone button starts a guided run. After the room check, a short message and a 3-2-1 countdown, one key lights up every two seconds: each key upward, each pair of pitch neighbours, then each key downward (34 cues, about 70 seconds). Pluck each highlighted key once. Press the button again to finish early. Replay scoring scales its timing window to the saved cue interval.
 - **Setup capture**: recording a key keeps the raw audio of that session. Finish is allowed before three plucks, so a failing setup can still be saved.
