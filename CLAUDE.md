@@ -248,6 +248,11 @@ Top-down flock of birds over an endless painted landscape. Press and hold (mouse
 - Do not add a visible public affordance for these controls unless explicitly requested.
 - Keep this shortcut and `src/app/feelings/window-01/README.md` synchronized if the behavior changes.
 
+### Kalimba accuracy captures
+- `/kalimba` has a hidden capture mode (`Control + Alt/Option + Shift + K`, or `?capture`) that saves raw mic audio with cue times.
+- `node scripts/kalimba/replay.mjs <capture.json>` replays a capture through the current recognition code and prints a confusion table. Use real captures to judge recognition changes; synthetic tests alone don't establish real-world accuracy.
+- Keep the shortcut and `src/features/kalimba/README.md` in sync.
+
 ### Error Boundary
 Locations:
 1. Root layout (`app/layout.js`) - catches all errors
