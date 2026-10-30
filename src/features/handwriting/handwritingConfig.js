@@ -132,7 +132,7 @@ const EXPORT_INSTRUCTIONS = [
   "To make the video, render this file right away, no questions needed: in the Motion repo (~/Desktop/Personal/Code/Motion) run",
   "  npm run handwriting -- <path to this file>",
   "That writes a transparent ProRes 4444 .mov to out/handwriting/<this file's name>.mov, ready to drop above footage in DaVinci Resolve.",
-  "Add --png for a transparent PNG sequence instead. Details: docs/handwriting.md in the Motion repo.",
+  "Add --png for a transparent PNG sequence instead. Details: tools/handwriting/README.md in the Motion repo.",
 ].join("\n");
 
 // The settings file the Motion repo's HandwritingClip composition reads.

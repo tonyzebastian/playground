@@ -198,14 +198,14 @@ const stop = createFrameLoop(canvas, (dt) => { /* draw */ });
 - Used by Grass; new experiments should use it instead of hand-rolling rAF + IntersectionObserver
 
 ### Handwriting Tool (`features/handwriting/`)
-Type a line and it is handwritten one pen stroke at a time. Used to make text overlays for videos.
+Type a line and it is handwritten one pen stroke at a time. Used to make text overlays for videos. The web tool is standalone: it previews and exports settings (JSON) but doesn't make video. Video is made by the internal Mac tool in the Motion repo (`tools/handwriting/`: Handwriting Studio, renderer, DaVinci Resolve menu entry), whose README documents the whole system, its dependencies and plans for a standalone version.
 - **Engine** (`engine/`): a plain-JS copy of the `HandWrite` engine in the Motion repo (`src/scenes/JunyStudios/shared/handwriting/`), with Remotion's helpers swapped for `engine/anim.js`. When the engine changes in Motion, port it here
   - `geometry.js` lays out letters as pen strokes and builds the lead-in, tail and wobble
   - `HandWrite.jsx` draws one line as SVG for a given (fractional) frame
   - `fonts/` holds built-in fonts as stroke data
   - `fontToStrokes.js` traces an uploaded `.ttf`/`.otf` into strokes in the browser (opentype.js)
 - **Studio** (`HandwritingStudio.jsx`): stage (1920×1080 canvas, scaled), text box, transport, and a DialKit panel configured in `handwritingConfig.js`
-- **Export to video**: the panel's **Export for video (.json)…** button saves the text and settings with `exportSettings()` in `handwritingConfig.js`. In the Motion repo, `npm run handwriting -- file.json` renders that as a transparent ProRes 4444 `.mov` for DaVinci Resolve (Motion's `docs/handwriting.md`)
+- **Export to video**: the panel's **Export for video (.json)…** button saves the text and settings with `exportSettings()` in `handwritingConfig.js`. In the Motion repo, `npm run handwriting -- file.json` renders that as a transparent ProRes 4444 `.mov` for DaVinci Resolve (Motion's `tools/handwriting/README.md`)
   - Keep `exportSettings()` keys in step with `handwritingClipSchema` in Motion's `HandwritingClip.tsx`
   - Every export starts with an `instructions` field (`EXPORT_INSTRUCTIONS`) saying how to render it, so the file can be handed to an agent and rendered straight away; Motion's AGENTS.md has the matching rule
 - Timing is in 30 fps frames. Lead-ins go on the first line only and tails on the last line only; `variation` seeds their shapes (`line-<n>-v<variation>`)
