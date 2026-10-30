@@ -34,9 +34,9 @@ const galleryCatalog = [
   }),
   componentCard('frost', 'Frost', {
     title: 'Frosted Glass',
-    size: { width: 240, height: 330 },
+    size: { width: 240, height: 300 },
     link: '/experiences/frost',
-    backgroundColor: '#eef4ec',
+    backgroundColor: '#0d141c',
   }),
   componentCard('flock', 'Flock', {
     title: 'Flock in Flight',

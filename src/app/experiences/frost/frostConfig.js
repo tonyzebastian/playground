@@ -1,87 +1,75 @@
-// DialKit controls for the frosted glass. Numeric controls are [default, min, max, step].
-// Blur radii are fractions of the stage height. `plants` controls (except size, width and the
-// colours) change where leaves are planted, so the foliage is regrown when they move.
+// DialKit controls for the rainy café window. Numeric controls are [default, min, max, step].
+// Positions and sizes are in stage units: the stage is 1 tall and FROST_ASPECT wide.
 
-export const FROST_ASPECTS = {
-  portrait: 2 / 3,
-  landscape: 3 / 2,
-  square: 1,
+// The stage is always 4:5 (width / height).
+export const FROST_ASPECT = 4 / 5;
+
+// Colour moods for the street behind the glass.
+export const FROST_MOODS = {
+  night: {
+    skyTop: '#04070c', skyHorizon: '#16212d', ground: '#06080b', building: '#0c1219', haze: '#2a3a4a',
+    window: '#ffbf73', lamp: '#ff8a33', glow: '#3a3a44',
+  },
+  city: {
+    skyTop: '#0a0f14', skyHorizon: '#24323a', ground: '#080b0d', building: '#121a1f', haze: '#3a4c55',
+    window: '#ffd6a0', lamp: '#ffa457', glow: '#4a4038',
+  },
+  dusk: {
+    skyTop: '#2a3340', skyHorizon: '#7d6646', ground: '#141012', building: '#2c261f', haze: '#7a7466',
+    window: '#ffcc80', lamp: '#ff9c45', glow: '#8a6a40',
+  },
 };
 
 export const FROST_CONFIG = {
-  canvas: {
-    _collapsed: true,
-    format: {
+  street: {
+    _collapsed: false,
+    mood: {
       type: 'select',
       options: [
-        { value: 'portrait', label: 'Portrait · 2:3' },
-        { value: 'landscape', label: 'Landscape · 3:2' },
-        { value: 'square', label: 'Square · 1:1' },
+        { value: 'night', label: 'Blue night' },
+        { value: 'city', label: 'City lights' },
+        { value: 'dusk', label: 'Dusk' },
       ],
-      default: 'portrait',
+      default: 'night',
     },
+    traffic: [2.65, 0, 3, 0.05],
+    brightness: [2.31, 0.3, 3, 0.01],
+    exposure: [1.71, 0.4, 2.5, 0.01],
+    lightSize: [0.93, 0.5, 2, 0.01],
+    windows: [0.34, 0, 2, 0.01],
+    seed: [7, 1, 99, 1],
   },
   glass: {
     _collapsed: false,
-    blurFar: [0.045, 0, 0.12, 0.001],
-    blurMid: [0.022, 0, 0.12, 0.001],
-    blurNear: [0.009, 0, 0.12, 0.0005],
-    frostWarp: [1, 0, 4, 0.01],
-    warpScale: [2.6, 0.5, 12, 0.1],
-    microFrost: [0.5, 0, 2, 0.01],
+    blur: [0.8, 0.3, 2, 0.01],
+    mist: [0.73, 0, 1, 0.01],
+    condensation: [1.21, 0, 1.5, 0.01],
+    mistReturn: [1, 0, 2, 0.01],
+    frostWarp: [2, 0, 3, 0.01],
   },
-  haze: {
+  drops: {
     _collapsed: true,
-    milk: [0.3, 0, 0.8, 0.01],
-    layerFog: [0.26, 0, 0.7, 0.01],
-    color: { type: 'color', default: '#f1f7ef' },
-    contrast: [1, 0.6, 1.5, 0.01],
-    saturation: [1, 0, 1.6, 0.01],
+    amount: [1.16, 0, 2, 0.01],
+    dropSize: [0.5, 0.3, 2, 0.01],
+    lens: [2, 0, 3, 0.01],
+    slideRate: [1.98, 0, 4, 0.01],
+    slideSpeed: [0.55, 0.2, 3, 0.01],
   },
   grain: {
     _collapsed: true,
-    amount: [0.4, 0, 2, 0.01],
-    size: [1.2, 0.5, 4, 0.1],
-    chroma: [0.3, 0, 1, 0.01],
-  },
-  backdrop: {
-    _collapsed: true,
-    top: { type: 'color', default: '#f7faf5' },
-    bottom: { type: 'color', default: '#e8f0e5' },
-    glowColor: { type: 'color', default: '#a8cbb0' },
-    glowStrength: [0.85, 0, 1.5, 0.01],
-    glowX: [0, -0.5, 1.5, 0.01],
-    glowY: [0, -0.5, 1.5, 0.01],
-  },
-  plants: {
-    _collapsed: true,
-    colorFar: { type: 'color', default: '#a4cdac' },
-    colorMid: { type: 'color', default: '#86b996' },
-    colorNear: { type: 'color', default: '#62a07a' },
-    opacityFar: [0.62, 0, 1, 0.01],
-    opacityMid: [0.8, 0, 1, 0.01],
-    opacityNear: [0.85, 0, 1, 0.01],
-    leafSize: [1, 0.5, 1.6, 0.01],
-    leafWidth: [1, 0.5, 2, 0.01],
-    stemWidth: [1, 0, 3, 0.01],
-    stemsFar: [4, 0, 12, 1],
-    stemsMid: [3, 0, 12, 1],
-    stemsNear: [2, 0, 10, 1],
-    leavesPerStem: [10, 4, 20, 1],
-    seed: [7, 1, 99, 1],
+    amount: [0.94, 0, 2, 0.01],
+    size: [0.7, 0.5, 4, 0.1],
+    chroma: [0.56, 0, 1, 0.01],
   },
   motion: {
     _collapsed: true,
     playing: true,
-    windSpeed: [1, 0, 3, 0.01],
-    sway: [1, 0, 3, 0.01],
-    flutter: [1, 0, 3, 0.01],
+    speed: [0.47, 0, 3, 0.01],
   },
   quality: {
     _collapsed: true,
-    pixelRatio: [1, 0.75, 2, 0.25],
-    renderScale: [0.6, 0.25, 1, 0.05],
-    blurTaps: [24, 8, 48, 1],
+    pixelRatio: [1.5, 0.75, 2, 0.25],
+    sceneScale: [1, 0.25, 1, 0.05],
   },
 };
 

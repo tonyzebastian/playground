@@ -2,7 +2,7 @@ import FrostStudio from "./FrostStudio";
 
 export const metadata = {
   title: "Frosted Glass - UiGlow",
-  description: "Bamboo leaves swaying behind a pane of frosted glass, rendered in real time with WebGL.",
+  description: "A rainy café window at night: blurred street lights and passing cars behind running raindrops, rendered in real time with WebGL.",
 };
 
 export default function FrostPage() {

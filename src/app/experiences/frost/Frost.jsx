@@ -22,14 +22,14 @@ export default function Frost({ values = FROST_DEFAULTS }) {
   }, []);
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[#eef4ec]">
+    <div className="relative h-full w-full overflow-hidden bg-[#0d141c]">
       <canvas
         ref={canvasRef}
         aria-hidden="true"
         className="block h-full w-full transition-opacity duration-700"
         style={{ opacity: ready ? 1 : 0 }}
       />
-      {!ready ? <CircularLoader className="text-emerald-900" /> : null}
+      {!ready ? <CircularLoader className="text-slate-300" /> : null}
     </div>
   );
 }

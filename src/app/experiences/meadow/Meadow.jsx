@@ -1605,9 +1605,10 @@ const Meadow = forwardRef(function Meadow({ values, logoUrl, stoneUrl, onNotice 
       gl.bindFramebuffer(gl.FRAMEBUFFER, scene.msFbo);
       gl.viewport(0, 0, w, h);
 
-      // camera: slow drift plus pointer parallax, a touch of roll like a handheld shot
-      pointer.x += (pointer.tx - pointer.x) * 0.04;
-      pointer.y += (pointer.ty - pointer.y) * 0.04;
+      // camera: slow drift plus optional pointer parallax, a touch of roll like a handheld shot.
+      // With followPointer off the camera eases back to centre instead of snapping.
+      pointer.x += ((cm.followPointer ? pointer.tx : 0) - pointer.x) * 0.04;
+      pointer.y += ((cm.followPointer ? pointer.ty : 0) - pointer.y) * 0.04;
       const px = pointer.x * cm.parallax;
       const py = pointer.y * cm.parallax;
       const eye = [Math.sin(time * 0.25) * 0.5 * cm.drift + px * 1.2, cm.height - py * 0.5, cm.distance + Math.sin(time * 0.19) * 0.4 * cm.drift];

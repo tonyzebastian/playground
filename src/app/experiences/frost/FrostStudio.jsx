@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { DialRoot, useDialKitController } from "dialkit";
 import AppHeader from "@/components/shared/AppHeader";
 import Frost from "./Frost";
-import { FROST_ASPECTS, FROST_CONFIG } from "./frostConfig";
+import { FROST_ASPECT, FROST_CONFIG } from "./frostConfig";
 import styles from "./FrostStudio.module.css";
 
 export default function FrostStudio() {
@@ -13,7 +13,6 @@ export default function FrostStudio() {
   // The panel is hidden by default (like Evening Window). The controller keeps every value alive while it is hidden.
   const dial = useDialKitController("Frosted Glass", FROST_CONFIG, { id: "frost" });
   const values = dial.values;
-  const aspect = FROST_ASPECTS[values.canvas.format] ?? FROST_ASPECTS.portrait;
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -36,25 +35,27 @@ export default function FrostStudio() {
 
       <div className={`${styles.layout} ${showControls ? styles.open : ""}`}>
         <div className={styles.content}>
-          <div className={styles.gallery} style={{ "--aspect": aspect }}>
-            <section className={styles.stage} aria-label="Plants moving behind frosted glass">
+          <div className={styles.gallery} style={{ "--aspect": FROST_ASPECT }}>
+            <section className={styles.stage} aria-label="A night street seen through a rainy window">
               <Frost values={values} />
             </section>
 
             <section className={styles.caption} aria-labelledby="frost-title">
               <h1 id="frost-title">Frosted Glass, October 2026</h1>
               <p>
-                Bamboo sways in a slow breeze on the far side of a pane of frosted
-                glass.
+                A fogged café window on a wet night. Cars wait at the light, a sign
+                stutters, and every drop holds its own small upside-down street.
               </p>
 
               <div className={styles.section}>
                 <h2>Dev notes.</h2>
                 <p>
-                  Built with three WebGL depth layers of procedural stems and
-                  leaves, each blurred by its own distance from the glass, then
-                  warped by a frost refraction, fogged, and finished with film
-                  grain. Press{" "}
+                  Built in WebGL. The street, with its buildings, lamps, signs and traffic
+                  that stops for the light, is drawn brighter than white and then blurred
+                  the way a lens blurs it, so every light becomes a soft disc. The glass
+                  is fogged with fine condensation, small drops bend a sharper,
+                  upside-down street through them, and once in a while one slides down
+                  and the fog slowly closes behind it. Press{" "}
                   <span className={styles.keys}>
                     <kbd>Control</kbd> + <kbd>Option / Alt</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd>
                   </span>{" "}

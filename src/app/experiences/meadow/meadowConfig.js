@@ -96,6 +96,7 @@ export const MEADOW_CONFIG = {
     fov: [56, 25, 95, 1],
     roll: [2, -25, 25, 0.5],
     drift: [1, 0, 3, 0.05],
+    followPointer: false, // camera leans toward the pointer
     parallax: [1, 0, 3, 0.05],
   },
   wind: {
