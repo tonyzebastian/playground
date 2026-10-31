@@ -1,7 +1,7 @@
-// The street behind the glass: from a café on a corner we look straight down a street.
-// Buildings line both sides, the road runs to the middle of the frame and vanishes into a
-// hazy city of towers. Cars come toward us and turn off just before the window; others turn
-// in and drive away. People walk along the pavements.
+// The street behind the glass: from a café on a skywalk across the road we look down the
+// street. Buildings line both sides, the road runs up the frame and vanishes into a hazy city
+// of towers. Two lanes each way: oncoming cars pass under us and leave through the bottom
+// left, departing cars appear at the bottom right and drive away. People walk the pavements.
 //
 // A plain pinhole camera: `d` is metres ahead, `side` metres to the right (negative = left),
 // `height` metres up. Each frame `update` fills `lights` (stage units, y up) and packs the
@@ -25,14 +25,19 @@ export const MAX_GLARE = 2;
 export const MAX_TREES = 8;
 export const TREE_STRIDE = 8;
 
-// Camera: focal length (stage heights per unit of side/d) and eye height in metres.
+// Camera: focal length (stage heights per unit of side/d) and eye height in metres. The
+// skywalk is about 7 m up; the horizon sits high in the frame, so we look down onto the road.
 export const FOCAL = 0.5;
-export const EYE = 1.6;
-export const HORIZON = 0.42;
+export const EYE = 7;
+export const HORIZON = 0.64;
+// Half the road's width, kerb to kerb.
+export const ROAD = 7;
 const FAR = 260;
 
 const WHITE_LED = [0.86, 0.92, 1];
-const HALOGEN = [1, 0.84, 0.6];
+// Headlights: a warm white, some more yellow (older halogen bulbs).
+const HEAD_WARM = [1, 0.88, 0.64];
+const HEAD_YELLOW = [1, 0.78, 0.46];
 const TAIL = [1, 0.08, 0.04];
 const BRAKE = [1, 0.06, 0.03];
 const SODIUM = [1, 0.5, 0.16];
@@ -79,11 +84,10 @@ export function project(d, side, height, aspect) {
 // Light cycle in seconds.
 const GREEN = 11;
 const AMBER = 2.5;
-const RED = 9;
+// Each direction has its own signal, half a cycle apart: one moves while the other waits.
+const RED = GREEN + AMBER;
 const CYCLE = GREEN + AMBER + RED;
-const SIGNAL_D = 26;
-// Cars turn off the street just before the window.
-const TURN_D = 9;
+const SIGNAL_D = 30;
 
 export function createStreet() {
   const lights = new Float32Array(MAX_LIGHTS * LIGHT_STRIDE);
@@ -167,7 +171,7 @@ export function createStreet() {
         const tall = r() < 0.18;
         const t = r();
         buildings.push({
-          side: sign * (8.2 + r() * 2.4),
+          side: sign * (ROAD + 3.4 + r() * 2.4),
           d0: d, d1: d + len,
           height: tall ? 32 + r() * 40 : 9 + r() * 20,
           floorH: 2.9 + r() * 0.9, colW: 1.8 + r() * 2.2,
@@ -190,14 +194,14 @@ export function createStreet() {
     for (const sign of [-1, 1]) {
       for (let td = 9 + r() * 6; td < 90 && trees.length < MAX_TREES; td += 16 + r() * 18) {
         if (r() < 0.3) continue;
-        trees.push({ d: td, side: sign * (6.6 + r() * 0.6), trunk: 2.6 + r() * 1.2, canopy: 2 + r() * 1.6, seed: r() * 50 });
+        trees.push({ d: td, side: sign * (ROAD + 1.2 + r() * 0.6), trunk: 2.6 + r() * 1.2, canopy: 2 + r() * 1.6, seed: r() * 50 });
       }
     }
     parked = [];
     for (const sign of [-1, 1]) {
       for (let pd = 12 + r() * 6; pd < 80; pd += 7 + r() * 14) {
         if (r() < 0.4) continue;
-        parked.push({ kind: r() < 0.1 ? 'truck' : 'car', d: pd, side: sign * 4.3, paint: Math.floor(r() * PAINTS), seed: r(), hazard: r() < 0.15 ? r() * 20 : -1 });
+        parked.push({ kind: r() < 0.1 ? 'truck' : 'car', d: pd, side: sign * (ROAD - 1.1), paint: Math.floor(r() * PAINTS), seed: r(), hazard: r() < 0.15 ? r() * 20 : -1 });
       }
     }
 
@@ -205,11 +209,12 @@ export function createStreet() {
     // Street lamps down both pavements, mostly sodium orange, some white LED.
     for (const sign of [-1, 1]) {
       for (let ld = 7 + r() * 5; ld < FAR; ld += 16 + r() * 8) {
-        fixed.push({ kind: 'lamp', d: ld, side: sign * 5.8, height: 6.5, color: r() < 0.8 ? SODIUM : WHITE_LED, flicker: r() < 0.06 ? 1 : 0 });
+        fixed.push({ kind: 'lamp', d: ld, side: sign * (ROAD + 0.6), height: 6.5, color: r() < 0.8 ? SODIUM : WHITE_LED, flicker: r() < 0.06 ? 1 : 0 });
       }
     }
-    fixed.push({ kind: 'signal', d: SIGNAL_D, side: 5.6, height: 4.2 });
-    fixed.push({ kind: 'signal', d: SIGNAL_D + 1, side: -5.6, height: 4.2 });
+    // Right signal: traffic going away. Left signal: traffic coming toward us.
+    fixed.push({ kind: 'signal', d: SIGNAL_D, side: ROAD + 0.4, height: 4.2, dir: 1 });
+    fixed.push({ kind: 'signal', d: SIGNAL_D + 1, side: -ROAD - 0.4, height: 4.2, dir: -1 });
 
     // Hanging signs: steady, slowly breathing, or a tired neon that stutters.
     for (const b of buildings) {
@@ -243,17 +248,20 @@ export function createStreet() {
 
     fixed.forEach((f) => { f.seed = r(); });
 
-    // Right-hand traffic: cars coming toward us on the left lane, going away on the right.
+    // Right-hand traffic: two lanes coming toward us on the left, two going away on the right.
+    // Departing cars start just behind the camera, under the skywalk.
     lanes = [
-      { dir: -1, side: -1.9, start: FAR, stop: SIGNAL_D + 3, timer: 1 },
-      { dir: 1, side: 1.9, start: TURN_D, stop: SIGNAL_D - 3, timer: 3 },
+      { dir: -1, side: -1.7, start: FAR, stop: SIGNAL_D + 3, timer: 1 },
+      { dir: -1, side: -4.6, start: FAR, stop: SIGNAL_D + 3, timer: 4 },
+      { dir: 1, side: 1.7, start: 0.6, stop: SIGNAL_D - 3, timer: 2 },
+      { dir: 1, side: 4.6, start: 0.6, stop: SIGNAL_D - 3, timer: 6 },
     ];
     cars = [];
     people = [];
   };
 
-  const signal = () => {
-    const t = clock % CYCLE;
+  const signal = (dir) => {
+    const t = (clock + (dir > 0 ? CYCLE / 2 : 0)) % CYCLE;
     return t < GREEN ? 'green' : t < GREEN + AMBER ? 'amber' : 'red';
   };
 
@@ -265,28 +273,33 @@ export function createStreet() {
     const b = rand();
     const beamMode = b < 0.2 ? 'high' : b < 0.34 ? 'flash' : 'low';
     cars.push({
-      lane, kind, d: lane.start, v: vmax * (lane.dir > 0 ? 0.4 : 0.9), vmax,
-      // Departing cars turn in from the cross street on the right.
-      side: lane.dir > 0 ? 9 : lane.side,
+      lane, kind, d: lane.start, v: vmax * 0.9, vmax,
+      side: lane.side,
       len: BODY[kind][0],
       beamMode,
       beam: beamMode === 'high' ? 1 : 0,
       dipAt: 30 + rand() * 30,
       flashAt: 35 + rand() * 60,
       flashClock: -1,
-      head: rand() < 0.6 ? WHITE_LED : HALOGEN,
+      head: rand() < 0.6 ? HEAD_WARM : HEAD_YELLOW,
       power: 0.8 + rand() * 0.5,
       paint: kind === 'bus' ? -1 : kind === 'truck' ? -2 : Math.floor(rand() * PAINTS),
       braking: 0,
+      // How hard this driver presses the brake, and when they next ease off it for a moment.
+      pressure: 0.5 + rand() * 0.5,
+      easeAt: 2 + rand() * 6,
+      easing: 0,
+      // Tail lamps differ car to car: small slits, round lamps, wide light bars.
+      tailSize: kind === 'bus' || kind === 'truck' ? 0.9 + rand() * 0.4 : 0.55 + rand() * 0.75,
       seed: rand(),
     });
   };
 
   const stepTraffic = (dt, traffic) => {
-    const state = signal();
     for (const lane of lanes) {
       lane.timer -= dt * traffic;
-      const room = !cars.some((c) => c.lane === lane && Math.abs(c.d - lane.start) < 16);
+      // Not next to a car in the other lane either, so two never arrive side by side.
+      const room = !cars.some((c) => c.lane.dir === lane.dir && Math.abs(c.d - lane.start) < (c.lane === lane ? 16 : 18));
       if (lane.timer <= 0 && room && traffic > 0) {
         spawn(lane);
         lane.timer = rand() < 0.55 ? 1.5 + rand() * 2.5 : 6 + rand() * 12;
@@ -296,22 +309,39 @@ export function createStreet() {
       const { lane } = car;
       let target = car.vmax;
       const toLine = (lane.stop - car.d) * lane.dir;
-      if (state !== 'green' && toLine > 0.5 && toLine < 45) target = Math.min(target, Math.max(0, (toLine - 1) * 0.55));
+      if (signal(lane.dir) !== 'green' && toLine > 0.5 && toLine < 45) target = Math.min(target, Math.max(0, (toLine - 1) * 0.55));
       for (const other of cars) {
         if (other === car || other.lane !== lane) continue;
         const ahead = (other.d - car.d) * lane.dir;
         const gap = ahead - (lane.dir > 0 ? car.len : other.len);
         if (ahead > 0 && gap < 30) target = Math.min(target, Math.max(0, (gap - 2.5) * 0.6));
       }
-      // Slow down to take the corner just before the window.
-      if (lane.dir < 0 && car.d < TURN_D + 12) target = Math.min(target, 5);
       const accel = target > car.v ? 2.2 : 6;
       car.v += Math.sign(target - car.v) * Math.min(Math.abs(target - car.v), accel * dt);
-      car.braking += ((target < car.v - 0.3 || car.v < 0.5 ? 1 : 0) - car.braking) * Math.min(1, dt * 5);
+      // Keep staggered with the neighbouring lane: a car level with or just ahead of us in the
+      // other lane makes us drop back, so two pairs of lights never come through together.
+      for (const other of cars) {
+        if (other === car || other.lane === lane || other.lane.dir !== lane.dir) continue;
+        const ahead = (other.d - car.d) * lane.dir;
+        if (ahead > -1.5 && ahead < 14 && (ahead > 0.5 || other.seed > car.seed)) {
+          target = Math.min(target, Math.max(0, other.v - (14 - ahead) * 0.5));
+        }
+      }
+      // Waiting in the queue, drivers shift their foot: pressing harder or softer, and now and
+      // then lifting off the pedal for a moment before pressing again.
+      const held = target < car.v - 0.3 || car.v < 0.5;
+      if (held && car.v < 0.5) {
+        car.easeAt -= dt;
+        if (car.easeAt <= 0 && car.easing <= 0) {
+          car.easing = 0.25 + rand() * 1.2;
+          car.easeAt = 3 + rand() * 9;
+          car.pressure = 0.4 + rand() * 0.6;
+        }
+      }
+      car.easing -= dt;
+      const pedal = held ? (car.easing > 0 ? 0.08 : car.pressure * (0.85 + 0.15 * noise(clock * 0.7 + car.seed * 40))) : 0;
+      car.braking += (pedal - car.braking) * Math.min(1, dt * 9);
       car.d += lane.dir * car.v * dt;
-      // Turning: oncoming cars swing off to the left; departing cars straighten into their lane.
-      if (lane.dir < 0 && car.d < TURN_D) car.side -= dt * 4.5;
-      if (lane.dir > 0) car.side += (lane.side - car.side) * Math.min(1, dt * 1.2);
 
       if (lane.dir < 0) {
         let beam = 0;
@@ -327,8 +357,8 @@ export function createStreet() {
         car.beam += (beam - car.beam) * Math.min(1, dt * 22);
       }
     }
-    cars = cars.filter((c) => c.d < FAR + 5 && c.side > -14 && c.d > 2);
-    return state;
+    // Oncoming cars are gone once they have passed under the skywalk.
+    cars = cars.filter((c) => c.d < FAR + 5 && c.d > 0.5);
   };
 
   const stepPeople = (dt, density) => {
@@ -339,7 +369,7 @@ export function createStreet() {
       const sign = rand() < 0.6 ? 1 : -1;
       people.push({
         dir, d: dir > 0 ? 2.5 : 30 + rand() * 10,
-        side: sign * (6.2 + rand() * 1.2),
+        side: sign * (ROAD + 0.9 + rand() * 1.4),
         speed: 1.1 + rand() * 0.5,
         tall: 1.6 + rand() * 0.3,
         umbrella: rand() < 0.4 ? 1 : 0,
@@ -372,7 +402,7 @@ export function createStreet() {
       layout(values.seed);
     }
     clock += dt;
-    const state = stepTraffic(dt, values.traffic);
+    stepTraffic(dt, values.traffic);
     stepPeople(dt, values.people ?? 1);
     const R = 0.05 * values.lightSize;
     const B = values.brightness;
@@ -440,7 +470,7 @@ export function createStreet() {
         addWithReflection(f.d, f.side, f.height, R * 1.1, 2.2 * k * B, color, 0.3, f.seed);
         if (pools.length < MAX_POOLS && f.d < 90) pools.push({ ...project(f.d, f.side - Math.sign(f.side), 0, aspect), color, k, size: 1 });
       } else if (f.kind === 'signal') {
-        addWithReflection(f.d, f.side, f.height, R * 0.9, 2.4 * B, SIGNAL[state], 0.4, f.seed);
+        addWithReflection(f.d, f.side, f.height, R * 0.9, 2.4 * B, SIGNAL[signal(f.dir)], 0.4, f.seed);
       } else if (f.kind === 'sign') {
         let k = 1;
         if (f.mode === 1) k = 0.55 + 0.45 * noise(clock * 0.25 + f.phase);
@@ -473,8 +503,7 @@ export function createStreet() {
 
     for (const car of cars) {
       const coming = car.lane.dir < 0;
-      const turning = coming && car.d < TURN_D;
-      const motion = [car.lane.dir * car.v * shutter, turning ? -4.5 * shutter : 0];
+      const motion = [car.lane.dir * car.v * shutter, 0];
       const s1 = car.seed;
       const s2 = (car.seed + 0.37) % 1;
       const big = car.kind === 'bus' || car.kind === 'truck';
@@ -490,7 +519,7 @@ export function createStreet() {
         }
         // A beam across the wet road ahead: what ties the lights to a car.
         const from = project(car.d, car.side, 0.2, aspect);
-        const to = project(Math.max(1.5, car.d - 12 - 10 * car.beam), car.side - (turning ? 4 : 0), 0, aspect);
+        const to = project(Math.max(1.5, car.d - 12 - 10 * car.beam), car.side, 0, aspect);
         const bw = Math.max(0.004, (1.2 * FOCAL) / car.d);
         const bi = (0.45 + 0.9 * car.beam) * car.power * B;
         add(from.x, from.y, Math.min(0.4, (3.5 * FOCAL) / Math.max(car.d - 12, 3)), bi, car.head, 2, car.seed, to.x - from.x, to.y - from.y, bw, car.d, car);
@@ -504,10 +533,12 @@ export function createStreet() {
         if (strength > 0.02) glare.push({ x: at.x, y: at.y, r: 0.22 + 0.3 * near + 0.12 * car.beam, strength, color: car.head });
       } else {
         const h = 0.95;
-        const p = (1.1 + 1.8 * car.braking) * car.power * B;
+        // Running lights are dim; the brake lights are what blaze, when slowing or stopped.
+        const p = (0.45 + 2.9 * car.braking) * car.power * B;
         const c = car.braking > 0.5 ? BRAKE : TAIL;
-        addWithReflection(car.d, car.side - halfW, h, R * 0.85, p, c, 0.5, s1, motion, car);
-        if (halfW) addWithReflection(car.d, car.side + halfW, h, R * 0.85, p, c, 0.5, s2, motion, car);
+        const tr = R * 0.85 * car.tailSize;
+        addWithReflection(car.d, car.side - halfW, h, tr, p, c, 0.5, s1, motion, car);
+        if (halfW) addWithReflection(car.d, car.side + halfW, h, tr, p, c, 0.5, s2, motion, car);
       }
     }
 

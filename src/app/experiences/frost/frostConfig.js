@@ -51,6 +51,13 @@ export const FROST_CONFIG = {
     mistReturn: [1, 0, 2, 0.01],
     frostWarp: [2, 0, 3, 0.01],
   },
+  // Thin, broken rays out of bright lights, from fine scratches and wipe marks on the glass.
+  streaks: {
+    _collapsed: false,
+    amount: [0.6, 0, 3, 0.01],
+    length: [0.25, 0.1, 1.2, 0.01],
+    blur: [0.6, 0, 2, 0.01],
+  },
   drops: {
     _collapsed: true,
     amount: [1.16, 0, 2, 0.01],

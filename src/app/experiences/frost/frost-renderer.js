@@ -1,6 +1,6 @@
 import { createFrameLoop } from '@/lib/frame-loop';
 import { FROST_MOODS } from './frostConfig';
-import { createStreet, EYE, FOCAL, HORIZON, LIGHT_STRIDE, MAX_BUILDINGS, MAX_GLARE, MAX_LIGHTS, MAX_PEOPLE, MAX_POOLS, MAX_TREES, MAX_VEHICLES } from './street';
+import { createStreet, EYE, FOCAL, HORIZON, ROAD, LIGHT_STRIDE, MAX_BUILDINGS, MAX_GLARE, MAX_LIGHTS, MAX_PEOPLE, MAX_POOLS, MAX_TREES, MAX_VEHICLES } from './street';
 import { createRain, DROP_STRIDE } from './rain';
 
 // A night street seen through a fogged, wet café window, in raw WebGL2.
@@ -65,12 +65,14 @@ uniform vec4 uPeople[${MAX_PEOPLE * 2}];
 uniform int uPeopleCount;
 uniform vec4 uPools[${MAX_POOLS * 2}];
 uniform int uPoolCount;
+uniform int uTaps;   // reflection samples: fewer for the sharp copy the drops show
 out vec4 outColor;
 ${HASH}
 
 const float F = ${FOCAL.toFixed(4)};
 const float EYE = ${EYE.toFixed(4)};
 const float HZ = ${HORIZON.toFixed(4)};
+const float ROAD = ${ROAD.toFixed(4)};
 
 float box(vec2 f, vec2 lo, vec2 hi) {
   vec2 a = step(lo, f) * step(f, hi);
@@ -282,10 +284,11 @@ void main() {
     if (dg < hitD) {
       float sideG = (p.x - cx) * dg / F;
       float a = abs(sideG);
-      vec3 ground = a < 5.2 ? uGround * 0.8 : uGround * 1.5;
-      ground += vec3(0.04) * smoothstep(0.12, 0.0, abs(a - 5.2)) * exp(-dg / 60.0);
-      // Painted centre line, broken up the road.
-      ground += vec3(0.18) * step(abs(sideG), 0.07) * step(fract(dg / 7.0), 0.45) * exp(-dg / 50.0);
+      vec3 ground = a < ROAD ? uGround * 0.8 : uGround * 1.5;
+      ground += vec3(0.04) * smoothstep(0.12, 0.0, abs(a - ROAD)) * exp(-dg / 60.0);
+      // A double centre line, and broken lines between the two lanes each way.
+      ground += vec3(0.16, 0.14, 0.08) * step(abs(abs(sideG) - 0.12), 0.06) * exp(-dg / 70.0);
+      ground += vec3(0.16) * step(abs(a - 3.15), 0.07) * step(fract(dg / 9.0), 0.4) * exp(-dg / 60.0);
       // Puddles mirror almost perfectly; the rough tarmac around them smears each reflection
       // into vertical streaks, longer the nearer the road.
       float puddle = smoothstep(0.45, 0.7, vnoise(vec2(sideG * 0.35, dg * 0.12)));
@@ -297,12 +300,13 @@ void main() {
       float jitter = hash12(gl_FragCoord.xy) - 0.5;
       vec3 refl = vec3(0.0);
       for (int k = 0; k < 4; k++) {
-        float o = (float(k) - 1.5 + jitter) / 2.0;
+        if (k >= uTaps) break;
+        float o = uTaps > 1 ? (float(k) - float(uTaps - 1) * 0.5 + jitter) / (float(uTaps) * 0.5) : jitter;
         vec2 rp = vec2(p.x + ripple + tilt.x, 2.0 * HZ - p.y + o * spread + tilt.y);
         float rd;
         refl += above(rp, rd);
       }
-      refl *= 0.25;
+      refl /= float(uTaps);
       // Fine vertical striations in the streaks.
       float striate = vnoise(vec2(p.x * 380.0, p.y * 5.0)) * 0.6 + vnoise(vec2(p.x * 120.0, p.y * 3.0)) * 0.4;
       refl *= mix(1.0, 0.55 + 0.9 * striate, rough * 0.6);
@@ -364,7 +368,7 @@ void main() {
       } else if (v > 0.55 && v < 0.85 && C.y < 1.5) {
         body = vec3(0.01) + uSkyHorizon * 0.2;
       }
-      vec3 lamp = C.y < 0.5 ? vec3(1.0, 0.93, 0.82) : vec3(1.0, 0.12, 0.06);
+      vec3 lamp = C.y < 0.5 ? vec3(1.0, 0.86, 0.6) : vec3(1.0, 0.12, 0.06);
       float corners = exp(-pow((u - 0.13) / 0.12, 2.0)) + exp(-pow((u - 0.87) / 0.12, 2.0));
       body += lamp * C.z * 0.8 * corners * exp(-pow((v - 0.4) / 0.18, 2.0));
       // A sheen of street light along the top edge.
@@ -661,6 +665,75 @@ out vec4 outColor;
 void main() { outColor = vec4(1.0, 1.0, 1.0, uAlpha); }
 `;
 
+// Light streaks: fine scratches and old wipe marks on the glass draw a thin ray out of each
+// very bright light. The scratches run in arcs (the way glass gets wiped), so the rays point
+// out from a centre below the frame, slanting a little differently across it.
+// Pass 1 keeps only the hot centres of the brightest lights from the sharp scene, capped so a
+// headlight isn't many times stronger than a lamp, and smeared vertically (rows are averaged)
+// so the rays can be traced smoothly with few samples.
+const BRIGHT_FRAG = `#version 300 es
+precision highp float;
+uniform sampler2D uSharp;
+uniform vec2 uRes;
+uniform float uLoad;
+out vec4 outColor;
+void main() {
+  vec2 uv = gl_FragCoord.xy / uRes;
+  vec3 acc = vec3(0.0);
+  for (int i = 0; i < 24; i++) {
+    vec2 q = vec2(uv.x, (gl_FragCoord.y - 0.5 + (float(i) + 0.5) / 24.0) / uRes.y);
+    vec3 c = textureLod(uSharp, q, 0.0).rgb * uLoad;
+    float l = max(dot(c, vec3(0.3, 0.6, 0.1)), 1e-4);
+    acc += c / l * min(l, 2.0) * smoothstep(0.9, 2.4, l);
+  }
+  outColor = vec4(acc / 24.0, 1.0);
+}
+`;
+
+// Pass 2: trace each pixel's ray back toward the light along the scratch direction.
+const STREAK_FRAG = `#version 300 es
+precision highp float;
+uniform sampler2D uBright;
+uniform vec2 uRes;
+uniform float uAspect;
+uniform float uLength;
+uniform float uSeed;
+out vec4 outColor;
+${HASH}
+
+// Rays fanning out from a point far below. \`line\` is the same all along a ray, so a light
+// either has this ray or not, and keeps its strength.
+vec3 fan(vec2 p, vec2 pivot, float salt, float len) {
+  vec2 toUv = vec2(1.0 / uAspect, 1.0);
+  vec2 dir = normalize(p - pivot);
+  float line = atan(dir.y, dir.x) * 55.0;
+  float scratch = smoothstep(0.58, 0.8, vnoise(vec2(line + salt, salt)));
+  if (scratch < 0.01) return vec3(0.0);
+  float L = uLength * len * 0.6 * (0.5 + 0.5 * vnoise(vec2(line * 0.7, salt + 7.0)));
+  vec3 acc = vec3(0.0);
+  const int N = 56;
+  for (int i = 0; i < N; i++) {
+    float t = ((float(i) + 0.5) / float(N) * 2.0 - 1.0) * L;
+    vec3 c = textureLod(uBright, (p + dir * t) * toUv, 0.0).rgb;
+    acc += c * exp(-abs(t) / L * 3.5);
+  }
+  // The scratch is a little uneven along its length, never broken into bits.
+  float along = dot(p, dir);
+  float even = 0.7 + 0.3 * vnoise(vec2(line * 0.5 + salt, along * 7.0));
+  return acc * (2.0 * L / float(N) / 0.01) * scratch * even;
+}
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / uRes;
+  vec2 p = vec2(uv.x * uAspect, uv.y);
+  float k = uSeed * 13.0;
+  vec2 a = vec2(uAspect * (0.25 + 0.2 * hash12(vec2(uSeed, 31.0))), -0.9);
+  vec2 b = vec2(uAspect * (0.75 + 0.3 * hash12(vec2(uSeed, 32.0))), -1.4);
+  vec3 c = fan(p, a, k, 1.0) + fan(p, b, k + 50.0, 0.7) * 0.5;
+  outColor = vec4(c, 1.0);
+}
+`;
+
 const GLASS_FRAG = `#version 300 es
 precision highp float;
 uniform sampler2D uBlur;
@@ -668,6 +741,9 @@ uniform sampler2D uSharp;
 uniform sampler2D uWater;
 uniform sampler2D uMist;
 uniform sampler2D uClear;
+uniform sampler2D uStreak;
+uniform float uStreaks;
+uniform float uStreakBlur;
 uniform vec2 uRes;
 uniform float uAspect;
 uniform float uSeed;
@@ -871,6 +947,19 @@ void main() {
     col = mix(col, drop, cover);
   }
 
+  // Rays from the scratches, with a faint colour split along them.
+  // Softened sideways, the way out-of-focus light spreads, plus a faint wider glow.
+  vec3 st = vec3(0.0);
+  float sw = 0.0;
+  for (int i = -4; i <= 4; i++) {
+    float o = float(i) / 4.0;
+    float wgt = exp(-o * o * 2.5);
+    st += textureLod(uStreak, uv + vec2(o * 0.012 * uStreakBlur / uAspect, o * 0.004 * uStreakBlur), 0.0).rgb * wgt;
+    sw += wgt;
+  }
+  st /= sw;
+  col += st * uStreaks * 3.5 * (0.7 + 0.3 * marks);
+
   // Dust on the glass: invisible in the dark, tiny bright specks where light is behind it.
   vec2 dc = floor(gl_FragCoord.xy / (1.6 * px));
   float speck = step(0.9984, hash12(dc + uSeed * 3.1));
@@ -940,15 +1029,19 @@ export function createFrost(canvas, getValues, { lite = false, onReady } = {}) {
   const wipeProgram = link(DROP_VERT, WIPE_FRAG);
   const fillProgram = link(FULLSCREEN_VERT, FILL_FRAG);
   const clearProgram = link(DROP_VERT, CLEAR_FRAG);
+  const brightProgram = link(FULLSCREEN_VERT, BRIGHT_FRAG);
+  const streakProgram = link(FULLSCREEN_VERT, STREAK_FRAG);
   const glassProgram = link(FULLSCREEN_VERT, GLASS_FRAG);
-  const sceneU = uniforms(sceneProgram, ['uRes', 'uAspect', 'uTime', 'uStore', 'uWindows', 'uSkyTop', 'uSkyHorizon', 'uGround', 'uBuilding', 'uWindow', 'uGlow', 'uBuildings', 'uBuildingCount', 'uVehicles', 'uVehicleCount', 'uPeople', 'uPeopleCount', 'uTrees', 'uTreeCount', 'uPools', 'uPoolCount']);
+  const sceneU = uniforms(sceneProgram, ['uRes', 'uAspect', 'uTime', 'uStore', 'uWindows', 'uSkyTop', 'uSkyHorizon', 'uGround', 'uBuilding', 'uWindow', 'uGlow', 'uBuildings', 'uBuildingCount', 'uVehicles', 'uVehicleCount', 'uPeople', 'uPeopleCount', 'uTrees', 'uTreeCount', 'uPools', 'uPoolCount', 'uTaps']);
   const blurU = uniforms(blurProgram, ['uScene', 'uRes', 'uAspect', 'uRadius', 'uLod']);
   const lightU = uniforms(lightProgram, ['uAspect', 'uRadiusScale', 'uSharp', 'uStore', 'uTime']);
   const dropU = uniforms(dropProgram, ['uAspect', 'uPixel', 'uGrow']);
   const wipeU = uniforms(wipeProgram, ['uAspect', 'uGrow']);
   const clearU = uniforms(clearProgram, ['uAspect', 'uGrow']);
+  const brightU = uniforms(brightProgram, ['uSharp', 'uRes', 'uLoad']);
+  const streakU = uniforms(streakProgram, ['uBright', 'uRes', 'uAspect', 'uLength', 'uSeed']);
   const fillU = uniforms(fillProgram, ['uAlpha']);
-  const glassU = uniforms(glassProgram, ['uBlur', 'uSharp', 'uWater', 'uMist', 'uClear', 'uRes', 'uAspect', 'uSeed', 'uLoad', 'uLens', 'uMistAmount', 'uCondense', 'uWarp', 'uExposure', 'uHaze', 'uGrain', 'uGrainSize', 'uChroma', 'uGlare']);
+  const glassU = uniforms(glassProgram, ['uBlur', 'uSharp', 'uWater', 'uMist', 'uClear', 'uStreak', 'uStreaks', 'uStreakBlur', 'uRes', 'uAspect', 'uSeed', 'uLoad', 'uLens', 'uMistAmount', 'uCondense', 'uWarp', 'uExposure', 'uHaze', 'uGrain', 'uGrainSize', 'uChroma', 'uGlare']);
 
   // One quad, drawn once per light, drop or wipe with per-instance attributes.
   const quad = gl.createBuffer();
@@ -1003,6 +1096,8 @@ export function createFrost(canvas, getValues, { lite = false, onReady } = {}) {
   const waterTarget = target();
   const mistTarget = target();
   const clearTarget = target();
+  const brightTarget = target({ float: true });
+  const streakTarget = target({ float: true });
 
   let width = 0;
   let height = 0;
@@ -1023,6 +1118,8 @@ export function createFrost(canvas, getValues, { lite = false, onReady } = {}) {
     sizeTarget(blurTarget, ...at(0.75));
     sizeTarget(sharpTarget, ...at(1));
     sizeTarget(waterTarget, w, h);
+    sizeTarget(brightTarget, Math.max(2, Math.round(w / 2)), Math.max(2, Math.round(h / 24)));
+    sizeTarget(streakTarget, Math.max(2, Math.round(w / 2)), Math.max(2, Math.round(h / 3)));
     sizeTarget(clearTarget, Math.max(2, Math.round(w / 2)), Math.max(2, Math.round(h / 2)));
     sizeTarget(mistTarget, Math.max(2, Math.round(w / 4)), Math.max(2, Math.round(h / 4)), [1, 1, 1, 1]);
   };
@@ -1034,7 +1131,7 @@ export function createFrost(canvas, getValues, { lite = false, onReady } = {}) {
   let mistReturn = 0;
   let announced = false;
 
-  const drawScene = (t, v, mood, aspect, counts) => {
+  const drawScene = (t, v, mood, aspect, counts, taps) => {
     gl.bindFramebuffer(gl.FRAMEBUFFER, t.fbo);
     gl.viewport(0, 0, t.w, t.h);
     gl.useProgram(sceneProgram);
@@ -1059,6 +1156,7 @@ export function createFrost(canvas, getValues, { lite = false, onReady } = {}) {
     gl.uniform1i(sceneU.uPeopleCount, counts.peopleCount);
     gl.uniform4fv(sceneU.uPools, street.poolData);
     gl.uniform1i(sceneU.uPoolCount, counts.poolCount);
+    gl.uniform1i(sceneU.uTaps, taps);
     gl.bindVertexArray(emptyVao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   };
@@ -1102,7 +1200,7 @@ export function createFrost(canvas, getValues, { lite = false, onReady } = {}) {
     gl.disable(gl.BLEND);
 
     // 1–2. The scene, then its lens blur, then the out-of-focus lights on top.
-    drawScene(sceneTarget, v, mood, aspect, counts);
+    drawScene(sceneTarget, v, mood, aspect, counts, 4);
     mipmap(sceneTarget);
     gl.bindFramebuffer(gl.FRAMEBUFFER, blurTarget.fbo);
     gl.viewport(0, 0, blurTarget.w, blurTarget.h);
@@ -1121,8 +1219,33 @@ export function createFrost(canvas, getValues, { lite = false, onReady } = {}) {
     mipmap(blurTarget);
 
     // 3. Nearly sharp, for the drops.
-    drawScene(sharpTarget, v, mood, aspect, counts);
+    drawScene(sharpTarget, v, mood, aspect, counts, 1);
     drawLights(sharpTarget, aspect, true, 1, counts.lightCount);
+
+    // 3b. Light streaks from scratches on the glass.
+    const streaks = v.streaks?.amount ?? 0;
+    if (streaks > 0) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, brightTarget.fbo);
+      gl.viewport(0, 0, brightTarget.w, brightTarget.h);
+      gl.useProgram(brightProgram);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, sharpTarget.texture);
+      gl.uniform1i(brightU.uSharp, 0);
+      gl.uniform2f(brightU.uRes, brightTarget.w, brightTarget.h);
+      gl.uniform1f(brightU.uLoad, 1 / STORE);
+      gl.bindVertexArray(emptyVao);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, streakTarget.fbo);
+      gl.viewport(0, 0, streakTarget.w, streakTarget.h);
+      gl.useProgram(streakProgram);
+      gl.bindTexture(gl.TEXTURE_2D, brightTarget.texture);
+      gl.uniform1i(streakU.uBright, 0);
+      gl.uniform2f(streakU.uRes, streakTarget.w, streakTarget.h);
+      gl.uniform1f(streakU.uAspect, aspect);
+      gl.uniform1f(streakU.uLength, v.streaks.length);
+      gl.uniform1f(streakU.uSeed, v.street.seed);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
 
     // 4. The water map.
     gl.bindFramebuffer(gl.FRAMEBUFFER, waterTarget.fbo);
@@ -1182,7 +1305,7 @@ export function createFrost(canvas, getValues, { lite = false, onReady } = {}) {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, width, height);
     gl.useProgram(glassProgram);
-    [blurTarget, sharpTarget, waterTarget, mistTarget, clearTarget].forEach((t, i) => {
+    [blurTarget, sharpTarget, waterTarget, mistTarget, clearTarget, streakTarget].forEach((t, i) => {
       gl.activeTexture(gl.TEXTURE0 + i);
       gl.bindTexture(gl.TEXTURE_2D, t.texture);
     });
@@ -1191,6 +1314,9 @@ export function createFrost(canvas, getValues, { lite = false, onReady } = {}) {
     gl.uniform1i(glassU.uWater, 2);
     gl.uniform1i(glassU.uMist, 3);
     gl.uniform1i(glassU.uClear, 4);
+    gl.uniform1i(glassU.uStreak, 5);
+    gl.uniform1f(glassU.uStreaks, streaks);
+    gl.uniform1f(glassU.uStreakBlur, v.streaks?.blur ?? 0.6);
     gl.uniform1f(glassU.uSeed, v.street.seed);
     gl.uniform2f(glassU.uRes, width, height);
     gl.uniform1f(glassU.uAspect, aspect);
