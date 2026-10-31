@@ -6,17 +6,20 @@ export const FROST_ASPECT = 4 / 5;
 
 // Colour moods for the street behind the glass.
 export const FROST_MOODS = {
+  // Teal night with amber windows and a yellow glow down the street.
   night: {
-    skyTop: '#04070c', skyHorizon: '#16212d', ground: '#06080b', building: '#0c1219', haze: '#2a3a4a',
-    window: '#ffbf73', lamp: '#ff8a33', glow: '#3a3a44',
+    skyTop: '#04090e', skyHorizon: '#163a40', ground: '#05090b', building: '#0a1216', haze: '#2a4a50',
+    window: '#ffb35a', lamp: '#ff9a3c', glow: '#8a7a3a',
   },
+  // Violet and pink city lights.
   city: {
-    skyTop: '#0a0f14', skyHorizon: '#24323a', ground: '#080b0d', building: '#121a1f', haze: '#3a4c55',
-    window: '#ffd6a0', lamp: '#ffa457', glow: '#4a4038',
+    skyTop: '#080a1c', skyHorizon: '#2c2f63', ground: '#07081a', building: '#121530', haze: '#40457a',
+    window: '#ffd0c8', lamp: '#ffa86a', glow: '#8a4a7a',
   },
+  // Warm dusk haze.
   dusk: {
-    skyTop: '#2a3340', skyHorizon: '#7d6646', ground: '#141012', building: '#2c261f', haze: '#7a7466',
-    window: '#ffcc80', lamp: '#ff9c45', glow: '#8a6a40',
+    skyTop: '#2c3a54', skyHorizon: '#a38364', ground: '#14121a', building: '#2e2a38', haze: '#8a7a74',
+    window: '#ffd28a', lamp: '#ffa04a', glow: '#c08050',
   },
 };
 
@@ -33,6 +36,7 @@ export const FROST_CONFIG = {
       default: 'night',
     },
     traffic: [2.65, 0, 3, 0.05],
+    people: [1, 0, 3, 0.05],
     brightness: [2.31, 0.3, 3, 0.01],
     exposure: [1.71, 0.4, 2.5, 0.01],
     lightSize: [0.93, 0.5, 2, 0.01],

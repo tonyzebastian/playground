@@ -1,6 +1,6 @@
 import { createFrameLoop } from '@/lib/frame-loop';
 import { FROST_MOODS } from './frostConfig';
-import { createStreet, LIGHT_STRIDE, MAX_BUILDINGS, MAX_GLARE, MAX_LIGHTS, MAX_POOLS } from './street';
+import { createStreet, EYE, FOCAL, HORIZON, LIGHT_STRIDE, MAX_BUILDINGS, MAX_GLARE, MAX_LIGHTS, MAX_PEOPLE, MAX_POOLS, MAX_TREES, MAX_VEHICLES } from './street';
 import { createRain, DROP_STRIDE } from './rain';
 
 // A night street seen through a fogged, wet café window, in raw WebGL2.
@@ -55,18 +55,23 @@ uniform vec3 uGround;
 uniform vec3 uBuilding;
 uniform vec3 uWindow;
 uniform vec3 uGlow;
-uniform vec2 uVP;
-uniform vec4 uNearKerb;   // two points on each line
-uniform vec4 uFarKerb;
-uniform vec4 uFacade;
 uniform vec4 uBuildings[${MAX_BUILDINGS * 3}];
 uniform int uBuildingCount;
+uniform vec4 uVehicles[${MAX_VEHICLES * 3}];
+uniform int uVehicleCount;
+uniform vec4 uTrees[${MAX_TREES * 2}];
+uniform int uTreeCount;
+uniform vec4 uPeople[${MAX_PEOPLE * 2}];
+uniform int uPeopleCount;
 uniform vec4 uPools[${MAX_POOLS * 2}];
 uniform int uPoolCount;
 out vec4 outColor;
 ${HASH}
 
-float lineY(vec4 l, float x) { return l.y + (x - l.x) * (l.w - l.y) / (l.z - l.x); }
+const float F = ${FOCAL.toFixed(4)};
+const float EYE = ${EYE.toFixed(4)};
+const float HZ = ${HORIZON.toFixed(4)};
+
 float box(vec2 f, vec2 lo, vec2 hi) {
   vec2 a = step(lo, f) * step(f, hi);
   return a.x * a.y;
@@ -79,77 +84,292 @@ vec3 shopColor(float k) {
   return vec3(1.0, 0.55, 0.7);
 }
 
+vec3 paintColor(float k) {
+  if (k < -1.5) return vec3(0.62, 0.64, 0.66);   // truck box
+  if (k < -0.5) return vec3(0.5, 0.1, 0.07);     // bus
+  if (k < 0.5) return vec3(0.03);
+  if (k < 1.5) return vec3(0.45, 0.47, 0.5);
+  if (k < 2.5) return vec3(0.72, 0.73, 0.75);
+  if (k < 3.5) return vec3(0.42, 0.05, 0.04);
+  if (k < 4.5) return vec3(0.05, 0.08, 0.18);
+  if (k < 5.5) return vec3(0.18);
+  return vec3(0.1, 0.2, 0.22);
+}
+
+// The air: dark overhead, glowing where the street opens onto the city.
+vec3 sky(vec2 p) {
+  float cx = uAspect * 0.5;
+  vec3 c = mix(uSkyHorizon, uSkyTop, smoothstep(HZ - 0.05, 1.0, p.y));
+  vec2 g = (p - vec2(cx, HZ)) * vec2(1.6, 4.0);
+  c += uGlow * exp(-dot(g, g) * 3.0) * 0.55;
+  return c;
+}
+
+// Distance haze: everything far away sinks into the glow at the end of the street.
+vec3 hazeOf(vec2 p) {
+  return mix(uSkyHorizon, uGlow, 0.35) * 0.9;
+}
+
+// Towers beyond the end of the street, in layers that fade with distance.
+vec3 city(vec2 p, vec3 base) {
+  float cx = uAspect * 0.5;
+  vec3 c = base;
+  for (int k = 3; k >= 0; k--) {
+    float D = 380.0 * pow(1.9, float(k));
+    float lateral = (p.x - cx) * D / F;
+    float w = 26.0 + float(k) * 12.0;
+    float id = floor(lateral / w + float(k) * 3.7);
+    float fx = fract(lateral / w + float(k) * 3.7);
+    float h = hash12(vec2(id, float(k)));
+    float H = 18.0 + 150.0 * h * h;
+    // Some towers carry a spire.
+    float spire = step(0.86, hash12(vec2(id, float(k) + 9.0))) * step(abs(fx - 0.5), 0.05) * 40.0;
+    float top = HZ + (H - EYE) * F / D;
+    float spireTop = HZ + (H + spire - EYE) * F / D;
+    float inside = step(0.08, fx) * step(fx, 0.92);
+    float hit = max(step(p.y, top) * inside, step(p.y, spireTop) * step(0.5, spire));
+    if (hit > 0.5 && p.y > HZ - 0.02) {
+      float haze = 0.35 + 0.17 * float(k);
+      vec3 t = mix(uBuilding * 0.7, hazeOf(p), haze);
+      // A scatter of faint lit windows.
+      vec2 wv = vec2(lateral / 3.0, (p.y - HZ) * D / F / 3.2);
+      float lit = step(0.9, hash12(floor(wv) + id)) * box(fract(wv), vec2(0.25), vec2(0.75));
+      c = t + uWindow * lit * 0.5 * (1.0 - haze) * uWindows;
+    }
+  }
+  return c;
+}
+
+// The buildings along both sides. Each pixel is traced to the nearest facade, end wall or
+// rooftop. Returns the colour and writes the distance hit (1e5 if nothing).
+vec3 street(vec2 p, out float hitD) {
+  float cx = uAspect * 0.5;
+  float dx = p.x - cx;
+  hitD = 1e5;
+  int hitI = -1;
+  float hu = 0.0;
+  float hv = 0.0;
+  float face = 0.0;   // 0 front, 1 end wall, 2 rooftop clutter
+  for (int i = 0; i < ${MAX_BUILDINGS}; i++) {
+    if (i >= uBuildingCount) break;
+    vec4 A = uBuildings[i * 3];       // side, d0, d1, height
+    vec4 C = uBuildings[i * 3 + 2];   // shop + type*8, tone, depth, wash
+    if (A.x * dx <= 0.0) continue;
+    float d = A.x * F / dx;
+    if (d >= A.y && d <= A.z && d < hitD) {
+      float h = (p.y - HZ) * d / F + EYE;
+      if (h >= 0.0 && h <= A.w) { hitD = d; hitI = i; hu = d - A.y; hv = h; face = 0.0; }
+      else if (h > A.w) {
+        // Plant rooms and tanks on the roof.
+        float unit = floor((d - A.y) / 5.0 + float(i));
+        float clutter = step(0.55, hash12(vec2(unit, float(i)))) * (1.5 + 2.5 * hash12(vec2(unit, float(i) + 3.0)));
+        if (h < A.w + clutter) { hitD = d; hitI = i; hu = d - A.y; hv = h; face = 2.0; }
+      }
+    }
+    // The end wall facing us, where the building starts.
+    float sidePx = dx * A.y / F;
+    float into = abs(sidePx) - abs(A.x);
+    if (into > 0.0 && into < C.z && A.y < hitD) {
+      float h = (p.y - HZ) * A.y / F + EYE;
+      if (h >= 0.0 && h <= A.w) { hitD = A.y; hitI = i; hu = into; hv = h; face = 1.0; }
+    }
+  }
+  if (hitI < 0) return vec3(0.0);
+
+  vec4 A = uBuildings[hitI * 3];
+  vec4 B = uBuildings[hitI * 3 + 1];   // floor height, column width, lit share, warmth
+  vec4 C = uBuildings[hitI * 3 + 2];
+  float seed = float(hitI) * 17.31;
+  float shop = mod(C.x, 8.0);
+  float type = floor(C.x / 8.0 + 0.01);
+  vec3 wall = uBuilding * C.y * (0.85 + 0.3 * hash12(vec2(seed, 2.0)));
+  // A painterly unevenness across each wall.
+  wall *= 0.85 + 0.3 * vnoise(vec2(hu * 0.15 + seed, hv * 0.1));
+  if (face > 1.5) return mix(wall * 0.6, hazeOf(p), 1.0 - exp(-hitD / 260.0));
+  if (face > 0.5) wall *= 0.55;
+  // Street light washes the lower floors; some facades glow warm all the way up.
+  wall *= 0.7 + 0.5 * exp(-hv / 6.0);
+  wall += uGlow * C.w * 0.22 * exp(-hv / 10.0) * (face > 0.5 ? 0.4 : 1.0);
+  if (type > 2.5) wall = mix(wall, mix(uSkyTop, uSkyHorizon, 0.5 + 0.4 * hv / A.w) * 0.8, 0.6);
+
+  vec3 lit3 = vec3(0.0);
+  vec2 grid = vec2(hu / B.y, hv / B.x);
+  vec2 cell = floor(grid);
+  vec2 f = fract(grid);
+  if (cell.y < 0.5 && shop > 0.5 && face < 0.5) {
+    // Shopfront: a bright, uneven interior, a dark awning, a lit sign board above.
+    float bay = floor(cell.x * 0.5);
+    float pane = box(f, vec2(0.04, 0.06), vec2(0.96, 0.62)) * step(0.06, fract(grid.x * 0.5));
+    float inside = 0.55 + 0.7 * vnoise(vec2(grid.x * 3.0, seed));
+    inside *= 1.0 - 0.35 * step(0.5, fract(f.y * 4.0)) * step(0.25, f.y);
+    lit3 += shopColor(shop) * pane * inside * 3.0;
+    float board = box(f, vec2(0.03, 0.72), vec2(0.97, 0.94)) * step(0.35, hash12(vec2(bay, seed + 4.0)));
+    lit3 += shopColor(1.0 + floor(hash12(vec2(bay, seed + 9.0)) * 4.0)) * board * 1.8;
+    wall *= 1.0 - 0.5 * box(f, vec2(0.0, 0.62), vec2(1.0, 0.72));
+  } else {
+    float h = hash12(cell + seed + face * 5.0);
+    float h2 = hash12(cell + seed + 7.7);
+    float clock = floor(uTime / (35.0 + h * 90.0) + h * 7.0);
+    float lit = step(hash12(cell + seed + clock * 1.37), B.z * (face > 0.5 ? 0.5 : 1.0));
+    vec3 tint = mix(vec3(0.78, 0.88, 1.0), uWindow, clamp(0.35 + B.w * 0.65 + (h - 0.5) * 0.6, 0.0, 1.0));
+    float level = 0.3 + 0.9 * hash12(cell + seed + 3.3);
+    float pane;
+    if (type > 0.5 && type < 1.5) {
+      pane = box(f, vec2(0.0, 0.32), vec2(1.0, 0.86)) * step(0.05, f.x);
+      lit = step(hash12(vec2(floor(grid.x * 0.3), cell.y) + seed + clock), B.z * 1.2);
+      tint = mix(vec3(0.82, 0.9, 1.0), tint, 0.3);
+    } else if (type > 1.5) {
+      pane = box(f, vec2(0.32, 0.14), vec2(0.68, 0.86));
+    } else {
+      vec2 lo = vec2(0.14 + 0.16 * h2, 0.22 + 0.1 * hash12(cell.yy + seed));
+      pane = box(f, lo, vec2(1.0 - lo.x, 0.8)) * step(0.1, h2);
+    }
+    float split = hash12(cell + seed + 11.0);
+    float curtain = split < 0.45 ? 1.0 : smoothstep(split - 0.05, split + 0.05, f.x) * 0.75 + 0.25;
+    float hot = 0.6 + 0.6 * exp(-dot(f - vec2(0.3 + 0.4 * h, 0.4), f - vec2(0.3 + 0.4 * h, 0.4)) * 10.0);
+    if (h > 0.985) { level *= 0.4 + 0.6 * vnoise(vec2(uTime * 4.0, seed)); tint = vec3(0.6, 0.75, 1.0); }
+    float recess = 1.0 - 0.45 * smoothstep(0.6, 0.86, f.y);
+    lit3 += tint * pane * lit * level * curtain * hot * recess * 2.4;
+    wall *= 1.0 - 0.2 * pane * (1.0 - lit);
+  }
+  vec3 c = wall + lit3 * uWindows;
+  return mix(c, hazeOf(p), 1.0 - exp(-hitD / 260.0));
+}
+
+// Everything above the ground: buildings, the city beyond, the sky.
+vec3 above(vec2 p, out float hitD) {
+  vec3 c = street(p, hitD);
+  if (hitD > 9e4) c = city(p, sky(p));
+  return c;
+}
+
 void main() {
   vec2 uv = gl_FragCoord.xy / uRes;
   vec2 p = vec2(uv.x * uAspect, uv.y);
+  float cx = uAspect * 0.5;
 
-  // Sky, lit from below by the city.
-  vec3 col = mix(uSkyHorizon, uSkyTop, smoothstep(0.38, 1.0, p.y));
-  vec2 g = (p - uVP) * vec2(0.7, 1.6);
-  col += uGlow * exp(-dot(g, g) * 9.0) * 0.5;
-  // A low, uneven skyline far away.
-  float far = 0.44 + vnoise(vec2(p.x * 22.0, 3.0)) * 0.05 + step(0.7, hash12(vec2(floor(p.x * 40.0), 1.0))) * 0.04;
-  col = mix(col, uBuilding * 0.6 + uSkyHorizon * 0.4, step(p.y, far) * 0.85);
+  float hitD;
+  vec3 col = above(p, hitD);
 
-  // Ground: the far pavement, the wet road, and our own kerb.
-  float facadeY = lineY(uFacade, p.x);
-  float farKerb = lineY(uFarKerb, p.x);
-  float nearKerb = lineY(uNearKerb, p.x);
-  if (p.y < facadeY) {
-    vec3 pave = uGround * 1.6;
-    vec3 road = uGround * 0.8 + uSkyHorizon * 0.06;
-    // Wet asphalt: a faint sheen of the glowing sky in the distance.
-    road += uGlow * 0.08 * smoothstep(0.1, 0.0, abs(p.y - farKerb)) + uSkyHorizon * 0.05 * smoothstep(nearKerb, farKerb, p.y);
-    col = p.y > farKerb ? pave : p.y > nearKerb ? road : uGround * 1.2;
-  }
-
-  // Buildings, far to near. Each has its own floors, window rhythm and share of lit rooms.
-  for (int i = 0; i < ${MAX_BUILDINGS}; i++) {
-    if (i >= uBuildingCount) break;
-    vec4 A = uBuildings[i * 3];
-    vec4 B = uBuildings[i * 3 + 1];
-    vec4 C = uBuildings[i * 3 + 2];
-    if (p.x < A.x || p.x > A.y) continue;
-    float t = (p.x - A.x) / max(A.y - A.x, 1e-4);
-    float yb = mix(A.z, A.w, t);
-    float yt = mix(B.x, B.y, t);
-    if (p.y < yb || p.y > yt) continue;
-    float v = (p.y - yb) / max(yt - yb, 1e-4);
-    float seed = float(i) * 17.31;
-    vec3 wall = uBuilding * C.w * (0.85 + 0.3 * hash12(vec2(seed, 2.0)));
-    wall *= 0.85 + 0.15 * step(0.04, 1.0 - v);   // a darker cornice
-    col = wall;
-
-    vec2 grid = vec2(t * B.w, v * B.z);
-    vec2 cell = floor(grid);
-    vec2 f = fract(grid);
-    if (cell.y < 0.5 && C.z > 0.5) {
-      // A lit shopfront at street level, split by dark mullions.
-      float pane = box(f, vec2(0.06, 0.1), vec2(0.94, 0.82)) * step(0.08, fract(t * B.w * 0.5));
-      float hum = 0.8 + 0.4 * hash12(cell + seed);
-      col += shopColor(C.z) * pane * hum * 3.4 * uWindows;
-    } else {
-      float h = hash12(cell + seed);
-      // Rooms switch on and off now and then, each on its own slow clock.
-      float clock = floor(uTime / (35.0 + h * 90.0) + h * 7.0);
-      float lit = step(hash12(cell + seed + clock * 1.37), C.x);
-      vec2 lo = vec2(0.18 + 0.1 * hash12(vec2(seed, 5.0)), 0.25);
-      float pane = box(f, lo, vec2(1.0 - lo.x, 0.78));
-      vec3 tint = mix(vec3(0.8, 0.88, 1.0), uWindow, clamp(0.35 + C.y * 0.65 + (h - 0.5) * 0.5, 0.0, 1.0));
-      float level = 0.25 + 0.9 * hash12(cell + seed + 3.3);
-      // One window here and there has a television on.
-      if (h > 0.985) level *= 0.4 + 0.6 * vnoise(vec2(uTime * 4.0, seed));
-      col += tint * pane * lit * level * 2.6 * uWindows;
+  // The ground, where it is nearer than any building: a wet road that mirrors the street.
+  if (p.y < HZ) {
+    float dg = EYE * F / (HZ - p.y);
+    if (dg < hitD) {
+      float sideG = (p.x - cx) * dg / F;
+      float a = abs(sideG);
+      vec3 ground = a < 5.2 ? uGround * 0.8 : uGround * 1.5;
+      ground += vec3(0.04) * smoothstep(0.12, 0.0, abs(a - 5.2)) * exp(-dg / 60.0);
+      // Painted centre line, broken up the road.
+      ground += vec3(0.18) * step(abs(sideG), 0.07) * step(fract(dg / 7.0), 0.45) * exp(-dg / 50.0);
+      // Puddles: patches that mirror almost perfectly, ripples elsewhere.
+      float puddle = smoothstep(0.45, 0.7, vnoise(vec2(sideG * 0.35, dg * 0.12)));
+      vec2 rp = vec2(p.x + (vnoise(vec2(p.x * 60.0, p.y * 260.0)) - 0.5) * 0.006 * (1.0 - puddle), 2.0 * HZ - p.y);
+      float rd;
+      vec3 refl = above(rp, rd);
+      float fresnel = mix(0.25, 0.85, exp(-(HZ - p.y) * 6.0));
+      col = mix(ground, refl * 0.85, clamp(fresnel + puddle * 0.3, 0.0, 0.95));
+      hitD = dg;
     }
   }
 
-  // Lamplight pooled on the pavement, road and walls.
+  // Trees on the pavements: a trunk and a ragged crown; the gaps drift a little.
+  for (int i = 0; i < ${MAX_TREES}; i++) {
+    if (i >= uTreeCount) break;
+    vec4 T = uTrees[i * 2];
+    vec4 U = uTrees[i * 2 + 1];
+    if (abs(p.x - T.x) < U.x && p.y > T.y && p.y < T.z) col = mix(col, vec3(0.006), 0.9);
+    vec2 dd = (p - vec2(T.x, T.z)) / T.w;
+    if (dot(dd, dd) > 2.5) continue;
+    dd.y *= 1.15;
+    float n = vnoise(dd * 2.6 + U.y) * 0.5 + vnoise(dd * 6.5 + U.y * 2.0) * 0.3 + vnoise(dd * 14.0 + U.y) * 0.2;
+    float edge = length(dd) - (0.62 + 0.45 * n);
+    float gaps = smoothstep(0.58, 0.75, vnoise(dd * 11.0 + U.y + vec2(uTime * 0.12, uTime * 0.05)));
+    float mask = smoothstep(0.06, -0.06, edge) * (1.0 - gaps * 0.8);
+    col = mix(col, vec3(0.006, 0.009, 0.007) + uGlow * 0.06 * smoothstep(0.6, -0.8, dd.y), mask);
+  }
+
+  // Vehicles, far to near, as boxes: the end facing us, then the roof and side running away.
+  for (int i = 0; i < ${MAX_VEHICLES}; i++) {
+    if (i >= uVehicleCount) break;
+    vec4 N = uVehicles[i * 3];       // near face: x0, x1, y0, y1
+    vec4 R = uVehicles[i * 3 + 1];   // far face
+    vec4 C = uVehicles[i * 3 + 2];   // type, lit end (0 head, 1 tail, 2 none), glow, paint
+    float lo = 0.0;
+    float hi = 1.0;
+    // p lies inside the face interpolated between near (t = 0) and far (t = 1).
+    float a1 = R.x - N.x; float b1 = p.x - N.x;
+    if (abs(a1) > 1e-6) { if (a1 > 0.0) hi = min(hi, b1 / a1); else lo = max(lo, b1 / a1); } else if (b1 < 0.0) continue;
+    float a2 = N.y - R.y; float b2 = N.y - p.x;
+    if (abs(a2) > 1e-6) { if (a2 > 0.0) hi = min(hi, b2 / a2); else lo = max(lo, b2 / a2); } else if (b2 < 0.0) continue;
+    float a3 = R.z - N.z; float b3 = p.y - N.z;
+    if (abs(a3) > 1e-6) { if (a3 > 0.0) hi = min(hi, b3 / a3); else lo = max(lo, b3 / a3); } else if (b3 < 0.0) continue;
+    float a4 = N.w - R.w; float b4 = N.w - p.y;
+    if (abs(a4) > 1e-6) { if (a4 > 0.0) hi = min(hi, b4 / a4); else lo = max(lo, b4 / a4); } else if (b4 < 0.0) continue;
+    if (lo > hi) continue;
+    vec3 paint = paintColor(C.w);
+    float lum = dot(paint, vec3(0.3, 0.6, 0.1));
+    vec3 body;
+    if (lo < 1e-4) {
+      // The end facing us: lower body, glass above (narrower on a car), lamps at the corners.
+      float u = (p.x - N.x) / max(N.y - N.x, 1e-4);
+      float v = (p.y - N.z) / max(N.w - N.z, 1e-4);
+      body = paint * 0.12 + uSkyHorizon * 0.15 * v + uGlow * 0.05;
+      if (C.x < 0.5 || C.x > 2.5) {
+        if (v > 0.58 && (u < 0.1 + (v - 0.58) * 0.4 || u > 0.9 - (v - 0.58) * 0.4)) continue;
+        if (v > 0.6 && v < 0.94) body = vec3(0.01) + uSkyHorizon * 0.25 * (1.0 - v) + uGlow * 0.4 * exp(-pow((u - 0.3 - v * 0.2) / 0.06, 2.0));
+      } else if (C.x < 1.5) {
+        if (v > 0.45 && v < 0.85) body = mix(body, uWindow * 0.8, step(0.08, u) * step(u, 0.92));
+      } else if (v > 0.55 && v < 0.85 && C.y < 1.5) {
+        body = vec3(0.01) + uSkyHorizon * 0.2;
+      }
+      vec3 lamp = C.y < 0.5 ? vec3(1.0, 0.93, 0.82) : vec3(1.0, 0.12, 0.06);
+      float corners = exp(-pow((u - 0.13) / 0.12, 2.0)) + exp(-pow((u - 0.87) / 0.12, 2.0));
+      body += lamp * C.z * 0.8 * corners * exp(-pow((v - 0.4) / 0.18, 2.0));
+      // A sheen of street light along the top edge.
+      body += (uGlow * 0.6 + uSkyHorizon * 0.4) * exp(-pow((v - 0.55) / 0.04, 2.0)) * (0.4 + 0.6 * lum);
+    } else {
+      // Roof and side, running away from us.
+      float yTop = mix(N.w, R.w, lo);
+      bool roof = p.y > yTop - 0.002 * (1.0 + lo);
+      body = roof ? paint * 0.18 + uSkyHorizon * 0.35 + uGlow * 0.15 : paint * 0.08 + uSkyHorizon * 0.08;
+      if (!roof && C.x > 0.5 && C.x < 1.5) body = mix(body, uWindow * 0.7, step(0.45, fract(lo * 6.0)) * step(p.y, yTop - 0.004) * step(mix(N.z, R.z, lo) + (yTop - mix(N.z, R.z, lo)) * 0.45, p.y));
+    }
+    col = body;
+  }
+
+  // Lamplight pooled on the pavements, road and walls.
   for (int i = 0; i < ${MAX_POOLS}; i++) {
     if (i >= uPoolCount) break;
     vec4 P = uPools[i * 2];
     vec3 c = uPools[i * 2 + 1].rgb;
-    vec2 d = (p - P.xy) * vec2(1.0, p.y < facadeY ? 2.4 : 0.8);
-    col += c * P.w * exp(-dot(d, d) / (P.z * P.z)) * 0.45;
+    vec2 d = (p - P.xy) * vec2(1.0, p.y < HZ ? 3.0 : 0.8);
+    col += c * P.w * exp(-dot(d, d) / (P.z * P.z)) * (p.y < HZ ? 0.4 : 0.15);
+  }
+
+  // People on the pavements: dark shapes, soft at the edges.
+  for (int i = 0; i < ${MAX_PEOPLE}; i++) {
+    if (i >= uPeopleCount) break;
+    vec4 P = uPeople[i * 2];
+    vec4 Q = uPeople[i * 2 + 1];
+    vec2 q = (p - P.xy) / P.z;
+    if (abs(q.x) > 0.6 || q.y < -0.15 || q.y > 1.25) continue;
+    float swing = sin(Q.x) * 0.07;
+    float torso = length(max(abs(q - vec2(0.0, 0.6)) - vec2(0.07, 0.19), 0.0)) - 0.06;
+    float head = length(q - vec2(0.0, 0.88)) - 0.065;
+    vec2 hip = vec2(0.0, 0.4);
+    vec2 l1 = q - hip; vec2 s1 = vec2(swing, 0.0) - hip;
+    vec2 l2 = q - hip; vec2 s2 = vec2(-swing, 0.0) - hip;
+    float leg1 = length(l1 - s1 * clamp(dot(l1, s1) / dot(s1, s1), 0.0, 1.0)) - 0.04;
+    float leg2 = length(l2 - s2 * clamp(dot(l2, s2) / dot(s2, s2), 0.0, 1.0)) - 0.04;
+    float sdf = min(min(torso, head), min(leg1, leg2));
+    if (P.w > 0.5) {
+      vec2 e = (q - vec2(0.05, 0.98)) / vec2(0.36, 0.17);
+      sdf = min(sdf, max((length(e) - 1.0) * 0.17, 0.98 - q.y));
+    }
+    float mask = smoothstep(0.05, -0.05, sdf) * Q.z;
+    vec2 sh = q * vec2(2.4, 9.0);
+    col *= 1.0 - exp(-dot(sh, sh)) * 0.7 * Q.z;
+    col = mix(col, vec3(Q.y * 0.25) + uSkyHorizon * 0.06 * smoothstep(0.75, 1.1, q.y), mask);
   }
 
   outColor = vec4(col * uStore, 1.0);
@@ -202,6 +422,9 @@ out float vLength;
 out vec2 vOffset;
 out vec2 vScreen;
 out vec2 vSmear;     // half the motion, in radii
+out vec2 vBeam;
+out vec2 vBeamPos;
+out vec2 vBeamWidth;
 void main() {
   float kind = floor(aB.w + 0.001);
   float seed = fract(aB.w);
@@ -209,7 +432,11 @@ void main() {
   vec2 motion = aC.xy;
   vec2 extent;
   vec2 center;
-  if (kind > 0.5) {
+  if (kind > 1.5) {
+    // A headlight beam: from the light, along aC.xy, widening as it goes.
+    extent = abs(motion) * 0.5 + vec2(aA.z);
+    center = aA.xy + motion * 0.5;
+  } else if (kind > 0.5) {
     float len = aC.z;
     extent = vec2(r * 2.0 + abs(motion.x) * 0.5, r * (len * 0.5 + 1.4) + abs(motion.y) * 0.5);
     center = aA.xy - vec2(0.0, r * len * 0.5);
@@ -219,6 +446,9 @@ void main() {
   }
   vec2 p = center + aCorner * extent;
   vLocal = (p - aA.xy) / r;
+  vBeam = motion;
+  vBeamPos = p - aA.xy;
+  vBeamWidth = vec2(aC.z, aA.z);
   vSmear = motion * 0.5 / r;
   vKind = kind;
   vSeed = seed;
@@ -227,8 +457,8 @@ void main() {
   // Lights toward the frame edges are clipped by the lens into a cat's eye.
   vOffset = (aA.xy - vec2(uAspect * 0.5, 0.5)) * 1.1;
   // A smeared light spreads the same light over a longer shape.
-  float smear = 1.0 + length(motion) / max(r, 1e-4) * 0.55;
-  float energy = uSharp > 0.5 ? 1.0 : pow(0.05 / max(r, 0.004), 1.4) * 0.42;
+  float smear = kind > 1.5 ? 1.0 : 1.0 + length(motion) / max(r, 1e-4) * 0.55;
+  float energy = kind > 1.5 ? 0.35 : uSharp > 0.5 ? 1.0 : pow(0.05 / max(r, 0.004), 1.4) * 0.42;
   vColor = aB.rgb * aA.w * energy * uStore / smear;
   gl_Position = vec4(p.x / uAspect * 2.0 - 1.0, p.y * 2.0 - 1.0, 0.0, 1.0);
 }
@@ -244,6 +474,9 @@ in float vLength;
 in vec2 vOffset;
 in vec2 vScreen;
 in vec2 vSmear;
+in vec2 vBeam;
+in vec2 vBeamPos;
+in vec2 vBeamWidth;
 uniform float uSharp;
 uniform float uTime;
 out vec4 outColor;
@@ -262,7 +495,17 @@ void main() {
   float frost = 0.72 + 0.38 * vnoise(vScreen * 28.0) + 0.18 * vnoise(vScreen * 71.0);
   float v;
 
-  if (vKind > 0.5) {
+  if (vKind > 1.5) {
+    // Headlight beam on wet tarmac: bright near the car, spreading and fading along the road,
+    // broken up by the uneven wet surface.
+    float L2 = max(dot(vBeam, vBeam), 1e-6);
+    float t = dot(vBeamPos, vBeam) / L2;
+    float across = length(vBeamPos - vBeam * t);
+    float w = mix(vBeamWidth.x, vBeamWidth.y, clamp(t, 0.0, 1.0));
+    float x = across / max(w, 1e-4);
+    float sheen = 0.6 + 0.4 * vnoise(vScreen * vec2(60.0, 14.0) + vSeed * 9.0);
+    v = exp(-x * x * 1.6) * smoothstep(-0.02, 0.06, t) * pow(max(1.0 - t, 0.0), 1.4) * sheen * 1.4;
+  } else if (vKind > 0.5) {
     // A reflection on wet tarmac: fades in under the light, breaks into ripples, tapers away.
     float len = max(vLength, 1.0);
     float t = clamp(-q.y / len, 0.0, 1.0);
@@ -559,7 +802,7 @@ export function createFrost(canvas, getValues, { lite = false, onReady } = {}) {
   const wipeProgram = link(DROP_VERT, WIPE_FRAG);
   const fillProgram = link(FULLSCREEN_VERT, FILL_FRAG);
   const glassProgram = link(FULLSCREEN_VERT, GLASS_FRAG);
-  const sceneU = uniforms(sceneProgram, ['uRes', 'uAspect', 'uTime', 'uStore', 'uWindows', 'uSkyTop', 'uSkyHorizon', 'uGround', 'uBuilding', 'uWindow', 'uGlow', 'uVP', 'uNearKerb', 'uFarKerb', 'uFacade', 'uBuildings', 'uBuildingCount', 'uPools', 'uPoolCount']);
+  const sceneU = uniforms(sceneProgram, ['uRes', 'uAspect', 'uTime', 'uStore', 'uWindows', 'uSkyTop', 'uSkyHorizon', 'uGround', 'uBuilding', 'uWindow', 'uGlow', 'uBuildings', 'uBuildingCount', 'uVehicles', 'uVehicleCount', 'uPeople', 'uPeopleCount', 'uTrees', 'uTreeCount', 'uPools', 'uPoolCount']);
   const blurU = uniforms(blurProgram, ['uScene', 'uRes', 'uAspect', 'uRadius', 'uLod']);
   const lightU = uniforms(lightProgram, ['uAspect', 'uRadiusScale', 'uSharp', 'uStore', 'uTime']);
   const dropU = uniforms(dropProgram, ['uAspect', 'uPixel']);
@@ -664,18 +907,14 @@ export function createFrost(canvas, getValues, { lite = false, onReady } = {}) {
     gl.uniform3fv(sceneU.uBuilding, hexToRgb(mood.building));
     gl.uniform3fv(sceneU.uWindow, hexToRgb(mood.window));
     gl.uniform3fv(sceneU.uGlow, hexToRgb(mood.glow));
-    const vp = street.project(4000, 0, 0);
-    gl.uniform2f(sceneU.uVP, vp.x, vp.y);
-    const line = (side) => {
-      const a = street.project(6, side, 0);
-      const b = street.project(400, side, 0);
-      return [a.x, a.y, b.x, b.y];
-    };
-    gl.uniform4fv(sceneU.uNearKerb, line(-5.5));
-    gl.uniform4fv(sceneU.uFarKerb, line(5.5));
-    gl.uniform4fv(sceneU.uFacade, line(10));
     gl.uniform4fv(sceneU.uBuildings, street.buildingData);
     gl.uniform1i(sceneU.uBuildingCount, counts.buildingCount);
+    gl.uniform4fv(sceneU.uVehicles, street.vehicleData);
+    gl.uniform1i(sceneU.uVehicleCount, counts.vehicleCount);
+    gl.uniform4fv(sceneU.uTrees, street.treeData);
+    gl.uniform1i(sceneU.uTreeCount, counts.treeCount);
+    gl.uniform4fv(sceneU.uPeople, street.peopleData);
+    gl.uniform1i(sceneU.uPeopleCount, counts.peopleCount);
     gl.uniform4fv(sceneU.uPools, street.poolData);
     gl.uniform1i(sceneU.uPoolCount, counts.poolCount);
     gl.bindVertexArray(emptyVao);
