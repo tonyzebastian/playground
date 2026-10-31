@@ -236,6 +236,31 @@ vec3 street(vec2 p, out float hitD) {
   return mix(c, hazeOf(p), 1.0 - exp(-hitD / 260.0));
 }
 
+// Rain landing on the wet road, in ground metres: rings that spread and fade.
+// Returns how the rings tilt the surface (xy) and how much they catch the light (z).
+vec3 rainRings(vec2 g, float t) {
+  vec2 q = g / 0.45;
+  vec2 id = floor(q);
+  vec2 f = fract(q);
+  vec2 n = vec2(0.0);
+  float hl = 0.0;
+  for (int y = -1; y <= 1; y++) {
+    for (int x = -1; x <= 1; x++) {
+      vec2 o = vec2(float(x), float(y));
+      vec2 k = id + o;
+      float h = hash12(k * 1.3 + 5.0);
+      float ph = fract(t * (0.7 + 0.6 * h) + h * 7.0);
+      vec2 dv = f - (o + hash22(k));
+      float d = length(dv);
+      float xr = (d - ph * 0.5) / 0.05;
+      float a = (1.0 - ph) * (1.0 - ph);
+      n += dv / max(d, 1e-4) * sin(xr * 2.2) * exp(-xr * xr) * a;
+      hl += exp(-xr * xr) * a;
+    }
+  }
+  return vec3(n, hl);
+}
+
 // Everything above the ground: buildings, the city beyond, the sky.
 vec3 above(vec2 p, out float hitD) {
   vec3 c = street(p, hitD);
@@ -261,13 +286,30 @@ void main() {
       ground += vec3(0.04) * smoothstep(0.12, 0.0, abs(a - 5.2)) * exp(-dg / 60.0);
       // Painted centre line, broken up the road.
       ground += vec3(0.18) * step(abs(sideG), 0.07) * step(fract(dg / 7.0), 0.45) * exp(-dg / 50.0);
-      // Puddles: patches that mirror almost perfectly, ripples elsewhere.
+      // Puddles mirror almost perfectly; the rough tarmac around them smears each reflection
+      // into vertical streaks, longer the nearer the road.
       float puddle = smoothstep(0.45, 0.7, vnoise(vec2(sideG * 0.35, dg * 0.12)));
-      vec2 rp = vec2(p.x + (vnoise(vec2(p.x * 60.0, p.y * 260.0)) - 0.5) * 0.006 * (1.0 - puddle), 2.0 * HZ - p.y);
-      float rd;
-      vec3 refl = above(rp, rd);
+      float rough = 1.0 - puddle;
+      vec3 rings = dg < 30.0 ? rainRings(vec2(sideG, dg), uTime * 1.3) * smoothstep(30.0, 8.0, dg) : vec3(0.0);
+      vec2 tilt = rings.xy * (0.25 + 0.75 * puddle) * F / dg * 0.05;
+      float ripple = (vnoise(vec2(p.x * 60.0, p.y * 260.0)) - 0.5) * 0.006 * rough;
+      float spread = rough * (0.006 + (HZ - p.y) * 0.18);
+      float jitter = hash12(gl_FragCoord.xy) - 0.5;
+      vec3 refl = vec3(0.0);
+      for (int k = 0; k < 4; k++) {
+        float o = (float(k) - 1.5 + jitter) / 2.0;
+        vec2 rp = vec2(p.x + ripple + tilt.x, 2.0 * HZ - p.y + o * spread + tilt.y);
+        float rd;
+        refl += above(rp, rd);
+      }
+      refl *= 0.25;
+      // Fine vertical striations in the streaks.
+      float striate = vnoise(vec2(p.x * 380.0, p.y * 5.0)) * 0.6 + vnoise(vec2(p.x * 120.0, p.y * 3.0)) * 0.4;
+      refl *= mix(1.0, 0.55 + 0.9 * striate, rough * 0.6);
+      refl *= 1.0 + rings.z * 0.35 * puddle;
       float fresnel = mix(0.25, 0.85, exp(-(HZ - p.y) * 6.0));
       col = mix(ground, refl * 0.85, clamp(fresnel + puddle * 0.3, 0.0, 0.95));
+      col += mix(uSkyHorizon, uGlow, 0.5) * rings.z * 0.05 * puddle;
       hitD = dg;
     }
   }
@@ -542,13 +584,14 @@ layout(location=0) in vec2 aCorner;
 layout(location=1) in vec4 aDrop;    // x, y, radius x, radius y
 layout(location=2) in float aSize;
 uniform float uAspect;
+uniform float uGrow;
 out vec2 vLocal;
 out float vSize;
 out float vSeed;
 void main() {
   // A little margin so an irregular outline can bulge past the nominal radius.
-  vec2 p = aDrop.xy + aCorner * aDrop.zw * 1.2;
-  vLocal = aCorner * 1.2;
+  vec2 p = aDrop.xy + aCorner * aDrop.zw * uGrow;
+  vLocal = aCorner * uGrow;
   vSize = aSize;
   vSeed = fract(sin(dot(aDrop.xy, vec2(12.9898, 78.233))) * 43758.5453);
   gl_Position = vec4(p.x / uAspect * 2.0 - 1.0, p.y * 2.0 - 1.0, 0.0, 1.0);
@@ -594,6 +637,23 @@ void main() {
 }
 `;
 
+// The clear ring around a bigger drop: it has swallowed the fine beads that were next to it.
+const CLEAR_FRAG = `#version 300 es
+precision highp float;
+in vec2 vLocal;
+in float vSize;
+in float vSeed;
+out vec4 outColor;
+void main() {
+  float d = length(vLocal);
+  float big = smoothstep(0.0007, 0.0022, vSize);
+  float reach = 1.5 + 1.1 * vSeed;
+  float v = smoothstep(reach, 1.0, d) * big;
+  if (v <= 0.0) discard;
+  outColor = vec4(v);
+}
+`;
+
 const FILL_FRAG = `#version 300 es
 precision highp float;
 uniform float uAlpha;
@@ -607,8 +667,10 @@ uniform sampler2D uBlur;
 uniform sampler2D uSharp;
 uniform sampler2D uWater;
 uniform sampler2D uMist;
+uniform sampler2D uClear;
 uniform vec2 uRes;
 uniform float uAspect;
+uniform float uSeed;
 uniform float uLoad;
 uniform float uLens;
 uniform float uMistAmount;
@@ -655,6 +717,65 @@ vec4 beads(vec2 px, float cell, float density, float seed) {
   return best;
 }
 
+float capsule(vec2 p, vec2 a, vec2 b) {
+  vec2 pa = p - a;
+  vec2 ba = b - a;
+  return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0));
+}
+
+// How thick the fog is before any drop touches it: heavier low down and toward the cold frame,
+// thinner in the warm middle. "marks" is what people and old drips left: a half-wiped arc,
+// a couple of finger smears, thin dried drip lines (1 untouched, 0 clear).
+float fogShape(vec2 p, vec2 uv, out float marks) {
+  float edge = min(min(uv.x, 1.0 - uv.x) * uAspect, min(uv.y, 1.0 - uv.y));
+  float t = 0.75 + 0.32 * pow(1.0 - uv.y, 1.6) + 0.2 * exp(-edge / 0.06);
+  vec2 c = (uv - vec2(0.5, 0.6)) * vec2(uAspect, 1.0);
+  t -= 0.2 * exp(-dot(c, c) * 6.0);
+  t *= 0.82 + 0.36 * vnoise(p * 2.3 + uSeed * 1.7);
+  marks = 1.0;
+
+  // A half-wiped arc, as if a patch was cleared with the side of a hand and is fogging back.
+  vec2 W = vec2(uAspect * (0.32 + 0.36 * hash12(vec2(uSeed, 1.0))), 0.16 + 0.18 * hash12(vec2(uSeed, 2.0)));
+  vec2 dw = (p - W) * vec2(1.0, 1.1);
+  float R = 0.24 + 0.08 * hash12(vec2(uSeed, 3.0));
+  float ang = atan(dw.y, dw.x);
+  float a0 = 0.3 + 0.5 * hash12(vec2(uSeed, 4.0));
+  float a1 = a0 + 1.3 + 0.7 * hash12(vec2(uSeed, 5.0));
+  float along = smoothstep(a0, a0 + 0.3, ang) * smoothstep(a1, a1 - 0.5, ang);
+  float rr = length(dw);
+  float width = 0.04 + 0.015 * sin(ang * 3.0 + uSeed);
+  float band = smoothstep(width, width * 0.4, abs(rr - R));
+  float streak = vnoise(vec2(rr * 520.0, ang * 4.0)) * 0.6 + vnoise(vec2(rr * 140.0, ang * 2.0)) * 0.4;
+  marks *= 1.0 - along * band * (0.5 + 0.45 * streak);
+
+  // Two finger smears.
+  for (int i = 0; i < 2; i++) {
+    float k = float(i) * 7.0 + uSeed;
+    vec2 a = vec2(uAspect * (0.15 + 0.7 * hash12(vec2(k, 11.0))), 0.45 + 0.4 * hash12(vec2(k, 12.0)));
+    vec2 b = a + vec2(0.02 + 0.04 * hash12(vec2(k, 13.0)), -0.05 - 0.07 * hash12(vec2(k, 14.0)));
+    float bend = (vnoise(vec2(p.y * 30.0, k)) - 0.5) * 0.008;
+    float dd = capsule(p + vec2(bend, 0.0), a, b);
+    float sm = smoothstep(0.011, 0.005, dd) * (0.55 + 0.45 * vnoise(vec2(p.x * 900.0, p.y * 140.0)));
+    marks *= 1.0 - 0.75 * sm;
+  }
+
+  // Old drip lines: thin, slightly wavy, clearer tracks running down from where a drop let go.
+  float colW = 0.032;
+  float id = floor(p.x / colW);
+  float h1 = hash12(vec2(id, uSeed + 21.0));
+  if (h1 > 0.74) {
+    float x0 = (id + 0.25 + 0.5 * hash12(vec2(id, uSeed + 22.0))) * colW;
+    float top = 0.5 + 0.5 * hash12(vec2(id, uSeed + 23.0));
+    float bottom = top - 0.08 - 0.35 * hash12(vec2(id, uSeed + 24.0));
+    float x = x0 + (vnoise(vec2(p.y * 9.0, id)) - 0.5) * 0.009 + (vnoise(vec2(p.y * 40.0, id + 3.0)) - 0.5) * 0.0015;
+    float w = 0.0012 + 0.0016 * hash12(vec2(id, uSeed + 25.0));
+    float span = smoothstep(top, top - 0.03, p.y) * smoothstep(bottom - 0.04, bottom + 0.02, p.y);
+    float age = 0.25 + 0.4 * hash12(vec2(id, uSeed + 26.0));
+    marks *= 1.0 - smoothstep(w, w * 0.3, abs(p.x - x)) * span * age;
+  }
+  return t;
+}
+
 vec3 aces(vec3 x) {
   return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
 }
@@ -666,11 +787,22 @@ void main() {
 
   // Fogged glass: the blurred street, softened and lifted where the mist is.
   float fog = texture(uMist, uv).r;
-  float m = fog * uMistAmount;
+  float marks;
+  float shape = fogShape(p, uv, marks);
+  float clearing = texture(uClear, uv).r;
+  float m = clamp(fog * uMistAmount * shape * marks * (1.0 - clearing * 0.35), 0.0, 1.0);
   vec2 suv = uv + frost(p) * uWarp * 0.008 * m * toUv;
   vec3 bg = textureLod(uBlur, suv, 0.0).rgb * uLoad;
-  vec3 scatter = textureLod(uBlur, uv, 4.5).rgb * uLoad;
+  // Thicker fog scatters light further.
+  vec3 scatter = textureLod(uBlur, uv, 3.5 + 2.0 * m).rgb * uLoad;
   bg = mix(bg, bg * 0.62 + scatter * 0.55, m) + uHaze * 0.03 * m;
+  // Bright lights bloom into the fog: a wide halo, strongest where the fog is thick and where
+  // old fingerprints and grease on the glass catch it.
+  float grease = 0.65 + 0.7 * vnoise(p * 6.0 + uSeed) * vnoise(p * 15.0 + 3.0);
+  vec3 bloom = textureLod(uBlur, uv, 5.0).rgb * 0.6 + textureLod(uBlur, uv, 6.5).rgb * 0.4;
+  float bl = dot(bloom, vec3(0.3, 0.6, 0.1)) * uLoad;
+  // Only light that is brighter than its surroundings blooms; the dark gets no lift.
+  bg += bloom * uLoad * smoothstep(0.15, 0.8, bl) * (0.03 + 0.2 * m * m) * grease;
 
   // Headlights aimed at the window: their light catches in the fog on the glass itself.
   vec3 glare = vec3(0.0);
@@ -691,13 +823,14 @@ void main() {
   float px = uRes.y / 1000.0;
   float field = vnoise(p * 3.1 + 7.0) * 0.65 + vnoise(p * 8.3 + 2.0) * 0.35;
   float dense = smoothstep(0.22, 0.78, field) * (0.6 + 0.55 * (1.0 - uv.y));
+  dense *= clamp(shape, 0.0, 1.2) * marks * (1.0 - clearing * 0.95);
   vec4 b0 = beads(gl_FragCoord.xy, 3.0 * px, 0.8 * dense, 23.0);
   vec4 b1 = beads(gl_FragCoord.xy, 5.6 * px, 0.62 * dense, 0.0);
   vec4 b2 = beads(gl_FragCoord.xy, 8.5 * px, 0.42 * (1.0 - dense * 0.55), 11.0);
   vec4 b = b0;
   if (b1.z > b.z) b = b1;
   if (b2.z > b.z) b = b2;
-  float beadCover = b.z * uCondense * smoothstep(0.25, 0.9, fog);
+  float beadCover = b.z * uCondense * smoothstep(0.25, 0.9, fog) * marks;
   if (beadCover > 0.001) {
     vec2 n = b.xy;
     float e = length(n);
@@ -737,6 +870,11 @@ void main() {
     drop += glare * (spec * 3.0 + smoothstep(0.55, 0.9, e) * (1.0 - rim) * 0.8);
     col = mix(col, drop, cover);
   }
+
+  // Dust on the glass: invisible in the dark, tiny bright specks where light is behind it.
+  vec2 dc = floor(gl_FragCoord.xy / (1.6 * px));
+  float speck = step(0.9984, hash12(dc + uSeed * 3.1));
+  col += vec3(1.0, 0.96, 0.9) * speck * (dot(scatter, vec3(0.3, 0.6, 0.1)) * 1.4 + 0.004);
 
   // Very bright light burns toward white, then a filmic curve.
   // Tone map brightness but keep each light's hue, so overlapping lights stay coloured;
@@ -801,14 +939,16 @@ export function createFrost(canvas, getValues, { lite = false, onReady } = {}) {
   const dropProgram = link(DROP_VERT, DROP_FRAG);
   const wipeProgram = link(DROP_VERT, WIPE_FRAG);
   const fillProgram = link(FULLSCREEN_VERT, FILL_FRAG);
+  const clearProgram = link(DROP_VERT, CLEAR_FRAG);
   const glassProgram = link(FULLSCREEN_VERT, GLASS_FRAG);
   const sceneU = uniforms(sceneProgram, ['uRes', 'uAspect', 'uTime', 'uStore', 'uWindows', 'uSkyTop', 'uSkyHorizon', 'uGround', 'uBuilding', 'uWindow', 'uGlow', 'uBuildings', 'uBuildingCount', 'uVehicles', 'uVehicleCount', 'uPeople', 'uPeopleCount', 'uTrees', 'uTreeCount', 'uPools', 'uPoolCount']);
   const blurU = uniforms(blurProgram, ['uScene', 'uRes', 'uAspect', 'uRadius', 'uLod']);
   const lightU = uniforms(lightProgram, ['uAspect', 'uRadiusScale', 'uSharp', 'uStore', 'uTime']);
-  const dropU = uniforms(dropProgram, ['uAspect', 'uPixel']);
-  const wipeU = uniforms(wipeProgram, ['uAspect']);
+  const dropU = uniforms(dropProgram, ['uAspect', 'uPixel', 'uGrow']);
+  const wipeU = uniforms(wipeProgram, ['uAspect', 'uGrow']);
+  const clearU = uniforms(clearProgram, ['uAspect', 'uGrow']);
   const fillU = uniforms(fillProgram, ['uAlpha']);
-  const glassU = uniforms(glassProgram, ['uBlur', 'uSharp', 'uWater', 'uMist', 'uRes', 'uAspect', 'uLoad', 'uLens', 'uMistAmount', 'uCondense', 'uWarp', 'uExposure', 'uHaze', 'uGrain', 'uGrainSize', 'uChroma', 'uGlare']);
+  const glassU = uniforms(glassProgram, ['uBlur', 'uSharp', 'uWater', 'uMist', 'uClear', 'uRes', 'uAspect', 'uSeed', 'uLoad', 'uLens', 'uMistAmount', 'uCondense', 'uWarp', 'uExposure', 'uHaze', 'uGrain', 'uGrainSize', 'uChroma', 'uGlare']);
 
   // One quad, drawn once per light, drop or wipe with per-instance attributes.
   const quad = gl.createBuffer();
@@ -862,6 +1002,7 @@ export function createFrost(canvas, getValues, { lite = false, onReady } = {}) {
   const sharpTarget = target({ float: true });
   const waterTarget = target();
   const mistTarget = target();
+  const clearTarget = target();
 
   let width = 0;
   let height = 0;
@@ -882,6 +1023,7 @@ export function createFrost(canvas, getValues, { lite = false, onReady } = {}) {
     sizeTarget(blurTarget, ...at(0.75));
     sizeTarget(sharpTarget, ...at(1));
     sizeTarget(waterTarget, w, h);
+    sizeTarget(clearTarget, Math.max(2, Math.round(w / 2)), Math.max(2, Math.round(h / 2)));
     sizeTarget(mistTarget, Math.max(2, Math.round(w / 4)), Math.max(2, Math.round(h / 4)), [1, 1, 1, 1]);
   };
 
@@ -992,10 +1134,23 @@ export function createFrost(canvas, getValues, { lite = false, onReady } = {}) {
     gl.useProgram(dropProgram);
     gl.uniform1f(dropU.uAspect, aspect);
     gl.uniform1f(dropU.uPixel, 1 / height);
+    gl.uniform1f(dropU.uGrow, 1.2);
     gl.bindBuffer(gl.ARRAY_BUFFER, dropInstances.buffer);
     gl.bufferData(gl.ARRAY_BUFFER, rain.drops.subarray(0, dropCount * DROP_STRIDE), gl.DYNAMIC_DRAW);
     gl.bindVertexArray(dropInstances.vao);
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, dropCount);
+
+    // 4b. Clear rings around the bigger drops (same drop buffer, a wider quad).
+    gl.bindFramebuffer(gl.FRAMEBUFFER, clearTarget.fbo);
+    gl.viewport(0, 0, clearTarget.w, clearTarget.h);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.blendEquation(gl.MAX);
+    gl.useProgram(clearProgram);
+    gl.uniform1f(clearU.uAspect, aspect);
+    gl.uniform1f(clearU.uGrow, 2.7);
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, dropCount);
+    gl.blendEquation(gl.FUNC_ADD);
 
     // 5. Mist creeps back in steps an 8-bit texture can hold; a sliding drop wipes it.
     gl.bindFramebuffer(gl.FRAMEBUFFER, mistTarget.fbo);
@@ -1015,6 +1170,7 @@ export function createFrost(canvas, getValues, { lite = false, onReady } = {}) {
       }
       gl.useProgram(wipeProgram);
       gl.uniform1f(wipeU.uAspect, aspect);
+      gl.uniform1f(wipeU.uGrow, 1.2);
       gl.bindBuffer(gl.ARRAY_BUFFER, wipeInstances.buffer);
       gl.bufferData(gl.ARRAY_BUFFER, wipeData.subarray(0, wipeCount * 4), gl.DYNAMIC_DRAW);
       gl.bindVertexArray(wipeInstances.vao);
@@ -1026,7 +1182,7 @@ export function createFrost(canvas, getValues, { lite = false, onReady } = {}) {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, width, height);
     gl.useProgram(glassProgram);
-    [blurTarget, sharpTarget, waterTarget, mistTarget].forEach((t, i) => {
+    [blurTarget, sharpTarget, waterTarget, mistTarget, clearTarget].forEach((t, i) => {
       gl.activeTexture(gl.TEXTURE0 + i);
       gl.bindTexture(gl.TEXTURE_2D, t.texture);
     });
@@ -1034,6 +1190,8 @@ export function createFrost(canvas, getValues, { lite = false, onReady } = {}) {
     gl.uniform1i(glassU.uSharp, 1);
     gl.uniform1i(glassU.uWater, 2);
     gl.uniform1i(glassU.uMist, 3);
+    gl.uniform1i(glassU.uClear, 4);
+    gl.uniform1f(glassU.uSeed, v.street.seed);
     gl.uniform2f(glassU.uRes, width, height);
     gl.uniform1f(glassU.uAspect, aspect);
     gl.uniform1f(glassU.uLoad, 1 / STORE);
