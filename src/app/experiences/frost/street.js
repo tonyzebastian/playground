@@ -1,4 +1,4 @@
-// The street behind the glass: from a café on a skywalk across the road we look down the
+// The street behind the glass: from a skywalk across the road we look down the
 // street. Buildings line both sides, the road runs up the frame and vanishes into a hazy city
 // of towers. Two lanes each way: oncoming cars pass under us and leave through the bottom
 // left, departing cars appear at the bottom right and drive away. People walk the pavements.
@@ -16,9 +16,9 @@ export const LIGHT_STRIDE = 12;
 export const MAX_LIGHTS = 480;
 export const MAX_BUILDINGS = 30;
 export const BUILDING_STRIDE = 12;
-export const MAX_VEHICLES = 14;
+export const MAX_VEHICLES = 24;
 export const VEHICLE_STRIDE = 12;
-export const MAX_PEOPLE = 6;
+export const MAX_PEOPLE = 16;
 export const PERSON_STRIDE = 8;
 export const MAX_POOLS = 12;
 export const MAX_GLARE = 2;
@@ -242,7 +242,7 @@ export function createStreet() {
       });
     }
 
-    // Faint reflections of the café behind us on the glass.
+    // Faint reflections of the room behind us on the glass.
     fixed.push({ kind: 'room', x: 0.12, y: 0.82, r: 0.16, power: 0.05 });
     fixed.push({ kind: 'room', x: 0.62, y: 0.9, r: 0.12, power: 0.035 });
 
@@ -363,7 +363,7 @@ export function createStreet() {
 
   const stepPeople = (dt, density) => {
     peopleTimer -= dt * density;
-    if (peopleTimer <= 0 && people.length < MAX_PEOPLE && density > 0) {
+    if (peopleTimer <= 0 && people.length < MAX_PEOPLE / 2 && density > 0) {
       peopleTimer = 3 + rand() * 8;
       const dir = rand() < 0.5 ? 1 : -1;
       const sign = rand() < 0.6 ? 1 : -1;
@@ -393,7 +393,7 @@ export function createStreet() {
     return [n0.x, n1.x, n0.y, n1.y, f0.x, f1.x, f0.y, f1.y];
   };
 
-  const update = (dt, values, nextAspect, mood, nextShutter = 0) => {
+  const update = (dt, values, nextAspect, colors, nextShutter = 0) => {
     shutter = nextShutter;
     aspect = nextAspect;
     const nextKey = `${values.seed}|${aspect.toFixed(2)}`;
@@ -417,7 +417,7 @@ export function createStreet() {
       ...cars.map((car) => ({ car, moving: true })),
       ...parked.map((car) => ({ car, moving: false })),
     ].sort((a, b) => b.car.d - a.car.d);
-    let nv = 0;
+    const shown = [];
     for (const { car, moving } of bodies) {
       if (car.d > 160) continue;
       const [len, width, height] = BODY[car.kind];
@@ -427,12 +427,16 @@ export function createStreet() {
       const x1 = Math.max(b[1], b[5]);
       if (x1 < -0.1 || x0 > aspect + 0.1) continue;
       occluders.push({ x0, x1, y0: b[2], y1: Math.max(b[3], b[7]), depth: car.d, owner: car, opacity: car.kind === 'bike' ? 0.5 : 0.92 });
-      if (nv < MAX_VEHICLES) {
-        const coming = moving && car.lane.dir < 0;
-        const glow = !moving ? 0 : coming ? 0.4 + car.beam : 0.3 + car.braking;
-        vehicleData.set([...b, VEHICLE_TYPE[car.kind], moving ? (coming ? 0 : 1) : 2, glow, car.paint], nv * VEHICLE_STRIDE);
-        nv++;
-      }
+      shown.push({ car, moving, b });
+    }
+    // The shader has room for MAX_VEHICLES bodies: give it the nearest ones (the far ones are
+    // tiny and blurred away), still drawn far to near so nearer bodies cover farther ones.
+    let nv = 0;
+    for (const { car, moving, b } of shown.slice(-MAX_VEHICLES)) {
+      const coming = moving && car.lane.dir < 0;
+      const glow = !moving ? 0 : coming ? 0.4 + car.beam : 0.3 + car.braking;
+      vehicleData.set([...b, VEHICLE_TYPE[car.kind], moving ? (coming ? 0 : 1) : 2, glow, car.paint], nv * VEHICLE_STRIDE);
+      nv++;
     }
     peopleData.fill(0);
     let np = 0;
@@ -466,7 +470,7 @@ export function createStreet() {
           const n = noise(clock * 0.35 + 7);
           k = n > 0.78 ? (noise(clock * 18) > 0.45 ? 1 : 0.15) : 1;
         }
-        const color = f.color === SODIUM ? mood.lamp : f.color;
+        const color = f.color === SODIUM ? colors.lamp : f.color;
         addWithReflection(f.d, f.side, f.height, R * 1.1, 2.2 * k * B, color, 0.3, f.seed);
         if (pools.length < MAX_POOLS && f.d < 90) pools.push({ ...project(f.d, f.side - Math.sign(f.side), 0, aspect), color, k, size: 1 });
       } else if (f.kind === 'signal') {
@@ -487,7 +491,7 @@ export function createStreet() {
         const p = project(f.d, f.side, f.height, aspect);
         add(p.x, p.y, R * (0.3 + f.power * 0.3), f.power * (0.7 + 0.3 * noise(clock * 0.3 + f.phase)) * B, f.color, 0, f.seed, 0, 0, 0, f.d);
       } else if (f.kind === 'room') {
-        add(f.x * aspect / 0.8, f.y, f.r, f.power, mood.window, 0, f.seed);
+        add(f.x * aspect / 0.8, f.y, f.r, f.power, colors.window, 0, f.seed);
       }
     }
 
