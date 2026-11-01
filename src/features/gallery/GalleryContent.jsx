@@ -23,7 +23,6 @@ const componentMap = {
     }),
   ),
   Flock: dynamic(() => import('@/app/experiences/flock/Flock')),
-  Frost: dynamic(() => import('@/app/experiences/frost/Frost')),
   PhysioStudio: dynamic(() => import('@/features/gallery/PhysioPreview')),
   CoinFlip: dynamic(() => import('@/app/svg-animations/coinflip/CoinFlip')),
 };
