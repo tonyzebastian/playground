@@ -106,7 +106,9 @@ export class TemplatePlucks {
     for(let index=0;index<this.count;index++){
       pending.scores[index]+=scores[index];pending.counts[index]=Math.max(pending.counts[index],counts[index]);
     }
-    if(time-pending.time>85||rms<threshold){this.pending=null;return null;}
+    // Keys with a single unique frequency region need a clean overall fit,
+    // which a pluck's attack can take up to ~150 ms to give on real tines.
+    if(time-pending.time>160||rms<threshold){this.pending=null;return null;}
     // Wait for the attack's broad transient to settle before deciding which
     // source added energy. This prevents a neighbour winning the first frame.
     if(time-pending.time<40)return null;

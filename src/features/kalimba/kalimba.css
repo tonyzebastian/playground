@@ -28,3 +28,32 @@
 @media(prefers-reduced-motion:reduce){.kalimba-capture-wave>span,.kalimba-wave-pulse,.kalimba-capture-slots li[data-captured]>span{animation:none!important}.kalimba-capture-wave[data-listening]>span{transform:scaleY(var(--wave-level))}.kalimba-wave-pulse{display:none}}
 
 .kalimba-song-trigger>span>small{display:block;font-size:10px;line-height:1.6;font-weight:400;color:var(--k-muted);margin-top:3px}
+.kalimba-capture{display:flex;justify-content:center;align-items:center;gap:12px;margin-top:8px;font-size:10px;color:var(--k-accent);letter-spacing:.04em;text-transform:uppercase}.kalimba-capture button,.kalimba-capture-note button{display:inline-flex;align-items:center;gap:5px;min-height:32px;padding:0 10px;border:1px solid var(--k-line);border-radius:999px;background:#fff;font-size:10px!important;text-transform:none;letter-spacing:0}.kalimba-capture-note{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px;color:var(--k-accent)}
+
+/* Practice controls sit below the instrument, under a live sound wave. */
+.kalimba-header-settings{width:auto!important;height:34px!important;gap:7px;padding:0 10px!important;margin-right:-10px!important;border-radius:8px!important;font-size:13px!important;color:#6f7a64!important}
+.kalimba-controls{width:100%;max-width:430px;display:flex;flex-direction:column;align-items:center;margin-top:6px}
+.kalimba-listening-wave{display:block;width:100%;height:60px}
+.kalimba-controls .kalimba-device-playback{position:static;margin-top:2px;gap:18px}
+.kalimba-controls .kalimba-device-caption{margin-top:2px;font-size:10px}
+.kalimba-check-text{display:block}.kalimba-settings-group .kalimba-check-text small{display:block;font-size:10px;color:#969c8e;margin-top:3px;line-height:1.5;padding-right:16px}
+.kalimba-settings-group label.kalimba-check-label{color:#7d8473}
+/* Practice view: shrink the instrument so it, the wave, song and controls fit one screen. */
+.kalimba-app:not([data-editing]) .kalimba-device{max-width:min(100%,430px,calc((100svh - 350px)*.7027))}
+@media(max-width:370px){.kalimba-controls .kalimba-device-playback{gap:12px}.kalimba-listening-wave{height:46px}}
+.kalimba-app:not([data-editing]) .kalimba-song-selection{min-height:20px}
+.kalimba-controls .kalimba-song-trigger{margin:0 0 10px;padding:4px}.kalimba-controls .kalimba-song-trigger>span{text-align:center}
+
+/* Play and mic buttons show song progress as a filling outline. */
+.kalimba-device-small,.kalimba-device-start{position:relative}
+.kalimba-ring{position:absolute;inset:-2px;width:calc(100% + 4px);height:calc(100% + 4px);transform:rotate(-90deg);pointer-events:none;overflow:visible}
+.kalimba-ring circle{fill:none;stroke-width:2px;vector-effect:non-scaling-stroke}
+.kalimba-ring-track{stroke:transparent}.kalimba-ring-fill{stroke:#5d7350;stroke-linecap:round;transition:stroke-dashoffset .35s ease-out}
+.kalimba-device-small[data-ring] .kalimba-ring-track{stroke:#c5ccba}
+.kalimba-device-small[data-ring]{border-color:transparent}
+.kalimba-device-start[data-active]{background:#eef1e8;border-color:transparent;color:#5d7350!important}
+.kalimba-device-start[data-active]:hover{background:#e4e8db}
+.kalimba-device-start[data-active] .kalimba-ring-track{stroke:#c5ccba}
+@media(prefers-reduced-motion:reduce){.kalimba-ring-fill{transition:none}}
+.kalimba-app[data-editing] .kalimba-song-selection,.kalimba-song-selection{min-height:20px}
+.kalimba-setup-hint{margin:14px 0 0;font-size:12px;text-align:center}

@@ -45,7 +45,10 @@ export function analyseCalibration(frames,plucks){
   // no longer invalidates the entire recording.
   const values=frames.map(frequencyOf).filter(f=>distance(f,match.frequency)<=85).sort((a,b)=>a-b);
   if(values.length<6)throw new Error('We couldn’t hear enough of the note. Move the phone closer and try again.');
-  return {...match,frequency:match.frequency};
+  // Save the pitch of the ringing note, not of the plucks: pitch read right at
+  // an attack runs sharp (24 cents on a pure 392 Hz test tone).
+  const frequency=values[Math.floor(values.length/2)];
+  return {...match,frequency,midi:Math.round(midiOf(frequency))};
 }
 
 export function toneProfile(frames){

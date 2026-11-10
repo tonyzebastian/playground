@@ -32,6 +32,13 @@ const galleryCatalog = [
     zoom: 1.32, // the render has white margins baked in; crop them out
     link: '/feelings/window-01',
   }),
+  videoCard('frost', {
+    content: '/thumbnails/frosted_glass.mp4',
+    title: 'Frosted Glass',
+    size: { width: 240, height: 300 },
+    link: '/experiences/frost',
+    backgroundColor: '#0d141c',
+  }),
   componentCard('flock', 'Flock', {
     title: 'Flock in Flight',
     size: { width: 280, height: 200 },

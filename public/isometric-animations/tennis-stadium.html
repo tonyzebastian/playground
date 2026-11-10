@@ -304,8 +304,9 @@ function mountFigure(cfg){
   const xs=pts.map(p=>p[0]), ys=pts.map(p=>p[1]);
   const bw = Math.max(...xs)-Math.min(...xs), bh = Math.max(...ys)-Math.min(...ys);
   // the object fills ~74% of the width / ~88% of the height, nudged right of centre so the buttons (top left) stay clear
-  const vbW = Math.max(bw/.74, bh/.88/.75), vbH = vbW*.75;
-  OX = (vbW-bw)/2 + vbW*.06 - Math.min(...xs); OY = vbH*.04 - Math.min(...ys);   // sit a little high: shadows fall downward
+  const EMB = new URLSearchParams(location.search).has('embed');   // embedded: no buttons to clear, so centre the scene and fill the frame
+  const vbW = EMB ? Math.max(bw/.97, bh/.97/.75) : Math.max(bw/.74, bh/.88/.75), vbH = vbW*.75;
+  OX = (vbW-bw)/2 + (EMB ? 0 : vbW*.06) - Math.min(...xs); OY = EMB ? (vbH-bh)/2 - Math.min(...ys) - vbH*.02 : vbH*.04 - Math.min(...ys);   // sit a little high: shadows fall downward
   const svg = document.getElementById('fig');
   svg.setAttribute('viewBox', `0 0 ${f(vbW)} ${f(vbH)}`);
   INK_K = vbW / INK_REF_VB;
@@ -455,7 +456,7 @@ function human(o, lk){
   add(W3(0, 0, shz + 2), rodR(W3(0, 0, shz), W3(0, .4, shz + 3), 1.1*SC, SKINM, .7));
   const hr_ = 3.1*SC*1.2247, hs = P(...head), skin = lk.skin || SKINM.l;
   add(head, `<circle cx="${f(hs[0])}" cy="${f(hs[1])}" r="${f(hr_)}" fill="${skin}" stroke="${INK}" stroke-width="1"/>`);
-  const hc = vadd(head, vadd(vmul(fw, -1.3*SC), [0,0,.9*SC])), hp = P(...hc);
+  const hf = o.hf ? [o.hf[0], o.hf[1], 0] : fw, hc = vadd(head, vadd(vmul(hf, -1.3*SC), [0,0,.9*SC])), hp = P(...hc);
   add(hc, `<circle cx="${f(hp[0])}" cy="${f(hp[1])}" r="${f(hr_*.98)}" fill="${lk.hair}" stroke="${INK}" stroke-width=".9"/>`);
   const sleeve = lk.sl ? shirt : SKINM;
   [[shR, elR, hR], [shL, elL, hL]].forEach(([s_, e_, h_]) => add(mid3(e_, h_), rodR(s_, e_, 1.35*SC, shirt) + rodR(e_, h_, 1.0*SC, sleeve)));
@@ -593,14 +594,14 @@ function court(m){
 }
 function wallFar(){
   let s = box(0, 0, Z0, W, 2, Z0 + WALLH, WALLM, tone, 1) + box(0, 0, Z0, 2, D, Z0 + WALLH, WALLM, tone, 1);
-  for (const [x, str] of [[30, 'UIGLOW'], [72, 'OPEN'], [114, 'UIGLOW']]) s += txY(x, 2.15, Z0 + 3.4, str, 4.4, '#fbf8ee', 800);
-  for (const [y, str] of [[60, 'UIGLOW'], [127, 'OPEN'], [194, 'UIGLOW']]) s += tx(2.15, y, Z0 + 3.4, str, 4.4, '#fbf8ee', 800);
+  for (const [x, str] of [[30, 'TONY TROPHY'], [72, 'OPEN'], [114, 'TONY TROPHY']]) s += txY(x, 2.15, Z0 + 3.4, str, 3.6, '#fbf8ee', 800);
+  for (const [y, str] of [[60, 'TONY TROPHY'], [127, 'OPEN'], [194, 'TONY TROPHY']]) s += tx(2.15, y, Z0 + 3.4, str, 3.6, '#fbf8ee', 800);
   return s;
 }
 function wallNear(){
   let s = box(W - 2, 0, Z0, W, D, Z0 + WALLH, WALLM, tone, 1) + box(0, D - 2, Z0, W, D, Z0 + WALLH, WALLM, tone, 1);
-  for (const [y, str] of [[50, 'UIGLOW'], [127, 'OPEN'], [204, 'UIGLOW']]) s += tx(W + .15, y, Z0 + 3.4, str, 4.4, '#fbf8ee', 800);
-  for (const [x, str] of [[30, 'UIGLOW'], [72, 'OPEN'], [114, 'UIGLOW']]) s += txY(x, D + .15, Z0 + 3.4, str, 4.4, '#fbf8ee', 800);
+  for (const [y, str] of [[50, 'TONY TROPHY'], [127, 'OPEN'], [204, 'TONY TROPHY']]) s += tx(W + .15, y, Z0 + 3.4, str, 3.6, '#fbf8ee', 800);
+  for (const [x, str] of [[30, 'TONY TROPHY'], [72, 'OPEN'], [114, 'TONY TROPHY']]) s += txY(x, D + .15, Z0 + 3.4, str, 3.6, '#fbf8ee', 800);
   return s;
 }
 function netSvg(){
@@ -613,7 +614,7 @@ function netSvg(){
   for (const px of [CX0 - 3, CX1 + 3]) s += rod([px, y, Z0], [px, y, Z0 + NETH + 3], 1.5, GOLD, toneI, 1.1);
   return s;
 }
-function umpire(t){
+function umpire(t, bp){
   const c = CHAIR, zs = c.zs, seatTop = zs + 2.5;
   let s = '';
   for (const [dx, dy] of [[-4.5,-4.5],[-4.5,4.5],[4.5,-4.5],[4.5,4.5]]) s += rod([c.x + dx, c.y + dy, Z0], [c.x + dx, c.y + dy, zs], 1, METAL, toneI, .9, 1, 8);
@@ -621,30 +622,67 @@ function umpire(t){
   s += box(c.x + 3, c.y - 5, zs - 11, c.x + 10, c.y + 5, zs - 9.5, METAL, toneI, .8);                    // footrest
   const back = box(c.x - 6.5, c.y - 5.5, zs + 2.5, c.x - 5, c.y + 5.5, zs + 17, WALLM, toneI, .9);
   const seat = box(c.x - 5.5, c.y - 5.5, zs, c.x + 5.5, c.y + 5.5, zs + 2.5, WALLM, toneI, .9);
-  const o = { px:c.x - .5, py:c.y, pz:seatTop, fx:1, fy:0, hz:3.4, shz:13, hR:[4.4,6,6], hL:[-4.4,6,6], fL:[-3.5, 7, -10], fR:[3.5, 7, -10] };
+  // the umpire watches the ball: the head swings to where it is (the net line, side to side) and the shoulders follow a little
+  const dy = bp[1] - c.y, dx = Math.max(10, bp[0] - c.x + 40), look = Math.atan2(dy, dx), lk = Math.max(-1.25, Math.min(1.25, look));
+  const o = { px:c.x - .5, py:c.y, pz:seatTop, fx:1, fy:0, hz:3.4, shz:13, hR:[4.4,6,6], hL:[-4.4,6,6], fL:[-3.5, 7, -10], fR:[3.5, 7, -10], hf:[Math.cos(lk), Math.sin(lk)], phi:-lk*.28 };
   const h = human(o, LK_UMP);
   const pts = [[c.x-5,c.y-5,Z0],[c.x+5,c.y-5,Z0],[c.x-5,c.y+5,Z0],[c.x+5,c.y+5,Z0],[c.x-6,c.y-5,zs+16],[c.x-6,c.y+5,zs+16], ...h.pts];
   return { svg: s + seat + back + h.svg, at:[c.x, c.y, zs], pts };
 }
 
 /* ---------- the stands (built once) ---------- */
-let STANDS = '';
+let STAND_ROWS = null;
 function buildStands(){
-  const sm = (x, y, z, k) => { const b = P(x, y, z + 3.2), h = P(x, y, z + 7.2), c = CROWD[Math.floor(rnd(k)*CROWD.length)], sk = SKINS[Math.floor(rnd(k + .5)*SKINS.length)];
-    return `<circle cx="${f(b[0])}" cy="${f(b[1])}" r="3.4" fill="${c}" stroke="${INK}" stroke-width=".6"/><circle cx="${f(h[0])}" cy="${f(h[1])}" r="2.1" fill="${sk}" stroke="${INK}" stroke-width=".6"/>`; };
-  let s = '';
-  // scoreboard behind the far stand (the text is drawn live)
+  const rows = [];
+  // the far stand (behind the scoreboard), then the left stand; each row is its concrete step plus the people sitting on it
   for (let i = 3; i >= 0; i--){
-    const zt = 18 + 8*i, y0 = -8*(i + 1), y1 = -8*i;
-    s += box(-32, y0, 0, W, y1, zt, CONC, tone, 1);
-    for (let x = -28, n = 0; x < W - 4; x += 11, n++) s += sm(x + rnd(i*50 + n)*3, (y0 + y1)/2 - 1, zt, i*50 + n + 7);
+    const zt = 18 + 8*i, y0 = -8*(i + 1), y1 = -8*i, row = { box: box(-32, y0, 0, W, y1, zt, CONC, tone, 1), people: [] };
+    for (let x = -28, n = 0; x < W - 4; x += 11, n++){ const px = x + rnd(i*50 + n)*3; row.people.push({ x:px, y:(y0 + y1)/2 - 1, z:zt, k:i*50 + n + 7, side:'far', pos:px }); }
+    rows.push(row);
   }
   for (let j = 3; j >= 0; j--){
-    const zt = 18 + 8*j, x0 = -8*(j + 1), x1 = -8*j;
-    s += box(x0, 0, 0, x1, D, zt, CONC, tone, 1);
-    for (let y = 6, n = 0; y < D - 4; y += 11, n++) s += sm((x0 + x1)/2 - 1, y + rnd(j*70 + n + 300)*3, zt, j*70 + n + 400);
+    const zt = 18 + 8*j, x0 = -8*(j + 1), x1 = -8*j, row = { box: box(x0, 0, 0, x1, D, zt, CONC, tone, 1), people: [] };
+    for (let y = 6, n = 0; y < D - 4; y += 11, n++){ const py = y + rnd(j*70 + n + 300)*3; row.people.push({ x:(x0 + x1)/2 - 1, y:py, z:zt, k:j*70 + n + 400, side:'near', pos:py }); }
+    rows.push(row);
   }
-  return s;
+  return rows;
+}
+const gauss = (t, c, w) => Math.exp(-Math.pow((t - c)/w, 2)), clamp01 = v => Math.max(0, Math.min(1, v));
+// how worked up the crowd is: small stirs at each shot, a roar at the winner, applause afterwards
+const excitement = t => .1 + .3*(gauss(t, 1.1, .3) + gauss(t, 2.5, .3) + gauss(t, 3.9, .3)) + .9*gauss(t, 6, 1.1) + .55*gauss(t, 7.8, 1.6);
+function spectator(sp, t, bp, e){
+  const r = rnd(sp.k + .31), ph = rnd(sp.k + .77)*6.28, col = CROWD[Math.floor(rnd(sp.k)*CROWD.length)], sk = SKINS[Math.floor(rnd(sp.k + .5)*SKINS.length)];
+  // a wave of people standing up and throwing their arms in the air runs down the far stand, then round the left one, after the winner
+  const wp = sp.side === 'far' ? (t - 6.3)*95 - 30 : (t - 7.7)*95 - 10, act = t > 6 && t < 12 ? gauss(sp.pos, wp, 17) : 0;
+  const kind = r < .34 ? 0 : r < .62 ? 1 : r < .8 ? 2 : 3;      // 0 watches, 1 cheers, 2 waves a flag, 3 claps
+  let ar = kind === 1 ? clamp01((e - .28)/.35) : kind === 0 ? clamp01((e - .75)/.3)*.8 : kind === 2 ? .55 + .45*e : 0;
+  ar = Math.max(ar, act);
+  const clap = kind === 3 ? clamp01((e - .22)/.3) : 0;
+  const hop = ar > .3 || act > .2 ? (.8 + 2.2*Math.max(e*.7, act))*Math.abs(Math.sin(t*7.5 + ph)) : .2*Math.sin(t*2 + ph);
+  const b = P(sp.x, sp.y, sp.z + 3.2 + hop), h = P(sp.x, sp.y, sp.z + 7.2 + hop*1.1), bs = P(...bp);
+  const gx = Math.max(-1, Math.min(1, (bs[0] - h[0])/110))*1.1;          // heads turn to follow the ball
+  const sh = [[b[0] - 2.7, b[1] - 1.4], [b[0] + 2.7, b[1] - 1.4]], tips = [];
+  sh.forEach(([sx, sy], i) => {
+    const sgn = i ? 1 : -1;
+    if (clap > .05) tips.push([b[0] + sgn*(.6 + 1.6*Math.abs(Math.cos(t*11 + ph))*clap), b[1] - 4.2]);
+    else if (kind === 2 && i === 1) tips.push([sx + 1.2 + Math.sin(t*5 + ph), sy - 7.5]);
+    else if (ar > .05) tips.push([sx + sgn*(1.3 + 1.4*Math.sin(t*9 + ph + i*1.6)*ar), sy - 3 - 6*ar]);
+    else tips.push([sx + sgn*.7, sy + 3.2]);
+  });
+  let arms = '';
+  sh.forEach(([sx, sy], i) => { const [tx_, ty_] = tips[i]; arms += `<path d="M${f(sx)} ${f(sy)}L${f(tx_)} ${f(ty_)}" stroke="${INK}" stroke-width="2.7" stroke-linecap="round" fill="none"/><path d="M${f(sx)} ${f(sy)}L${f(tx_)} ${f(ty_)}" stroke="${col}" stroke-width="1.4" stroke-linecap="round" fill="none"/>`; });
+  let hands = '';
+  tips.forEach(([tx_, ty_]) => { hands += `<circle cx="${f(tx_)}" cy="${f(ty_)}" r="1.15" fill="${sk}" stroke="${INK}" stroke-width=".5"/>`; });
+  let flag = '';
+  if (kind === 2){ const [fx_, fy_] = tips[1], fl = 3.8 + 1.2*Math.sin(t*8 + ph);
+    flag = `<path d="M${f(fx_)} ${f(fy_ + 1)}L${f(fx_)} ${f(fy_ - 7)}" stroke="${INK}" stroke-width="1" stroke-linecap="round"/><path d="M${f(fx_)} ${f(fy_ - 7)}L${f(fx_ + fl)} ${f(fy_ - 5.4 + Math.sin(t*8 + ph))}L${f(fx_)} ${f(fy_ - 3.8)}Z" fill="${CROWD[(Math.floor(rnd(sp.k + .9)*CROWD.length))]}" stroke="${INK}" stroke-width=".5"/>`; }
+  return arms + `<circle cx="${f(b[0])}" cy="${f(b[1])}" r="3.4" fill="${col}" stroke="${INK}" stroke-width=".6"/>` + hands
+    + `<circle cx="${f(h[0] + gx)}" cy="${f(h[1])}" r="2.1" fill="${sk}" stroke="${INK}" stroke-width=".6"/>` + flag;
+}
+function crowdSvg(t, bp){
+  if (!STAND_ROWS) STAND_ROWS = buildStands();
+  const e = excitement(t);
+  return STAND_ROWS.map(row => row.box + row.people.map(p => spectator(p, t, bp, e)).join('')).join('');
 }
 function scoreboard(st){
   let b = '';
@@ -658,7 +696,6 @@ function scoreboard(st){
 /* ---------- scene ---------- */
 function scene(st, m){
   const t = ((st.t % T) + T) % T;
-  if (!STANDS) STANDS = buildStands();
   OY += K;
   try {
     const rs = { S:R_('S', t), F:R_('F', t), BB:R_('BB', t) };
@@ -670,11 +707,11 @@ function scene(st, m){
     JUDGES.forEach(([x, y, fx, fy], i) => { const h = human(standPose(x, y, fx, fy, t, i*1.7), LK_JUDGE); shadows += castShadow(h.pts, Z0); put(h, [x, y, 0]); });
     [[134, 136, -1, 0]].forEach(([x, y, fx, fy], i) => { const h = human(crouchPose(x, y, fx, fy, t, i*2.3), LK_BOY); shadows += castShadow(h.pts, Z0); put(h, [x, y, 0]); });
     { const h = human(holdPose(30, 12, 0, 1, t, 1), LK_BOY); shadows += castShadow(h.pts, Z0); put(h, [30, 12, 0]); }
-    const um = umpire(t); shadows += `<g opacity=".6">${castShadow(um.pts, Z0)}</g>`; far.push(um);
+    const um = umpire(t, bp); shadows += `<g opacity=".6">${castShadow(um.pts, Z0)}</g>`; far.push(um);
     const ball = { at: bp, svg: ballSvg(bp) }; (bp[1] < NETY ? far : near).push(ball);
     shadows += ballShadow(bp);
 
-    let s = STANDS + scoreboard(st);
+    let s = crowdSvg(t, bp) + scoreboard(st);
     s += court(m) + wallFar() + clipTo(slabRing(Z0), `<g opacity=".72">${shadows}</g>`);
     s += byDepth(far) + netSvg() + byDepth(near) + wallNear();
     return s;
@@ -709,7 +746,7 @@ if (!ui.st.paused) runLoop();
 /* embedded in the Isometric Animations page: hide the page chrome and listen for the shared controls */
 if (new URLSearchParams(location.search).has('embed')){
   const css = document.createElement('style');
-  css.textContent = 'header,.actions,.controls,.made-with{display:none!important}body{padding:0;min-height:100vh;justify-content:center}.stage{padding:0;margin:0}#fig{max-height:100vh;margin:0}';
+  css.textContent = 'html,body{background:#fff!important;background-image:none!important}header,.actions,.controls,.made-with{display:none!important}body{padding:0;min-height:100vh;justify-content:center}.stage{padding:0;margin:0;max-width:none!important}#fig{max-width:none!important;max-height:100vh;margin:0}';
   document.head.appendChild(css);
 }
 addEventListener('message', e => {

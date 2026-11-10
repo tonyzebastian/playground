@@ -95,6 +95,7 @@ src/
 │   └── unused/                   # Deprecated components kept unchanged
 ├── features/                     # Feature-owned UI and rendering code
 │   ├── gallery/
+│   ├── handwriting/              # Handwriting tool (write-on text, video export)
 │   ├── link-library/
 │   ├── pond-lab/
 │   ├── vision-reveal/
@@ -143,8 +144,10 @@ Interactive infinite canvas showcasing all projects:
 - **Experiences**: Fish school, World clock, Car configurator, Flock in Flight
 - **UI Interactions**: Interactive visual demos + chat interface
 - **SVG Animations**: Coin flip, Comet hero, Unlock
-- **Tools**: Drawing canvas and Mosaic Image Lab
+- **Tools**: Drawing canvas, Mosaic Image Lab and Handwriting
 - **Mosaic Image Lab**: One GPU editor for mosaic, dither, water, cursor, print, palette, and export controls
+
+- **Handwriting** (`/tools/handwriting`, `features/handwriting/`): type text and watch it get handwritten stroke by stroke. See "Handwriting Tool" below
 
 ### 3. Component Architecture
 - **Reusable**: Modular design with factory functions
@@ -194,6 +197,19 @@ const stop = createFrameLoop(canvas, (dt) => { /* draw */ });
 ```
 - Pauses while off-screen or the tab is hidden; `dt` is clamped seconds
 - Used by Grass and Flock in Flight; new experiments should use it instead of hand-rolling rAF + IntersectionObserver
+
+### Handwriting Tool (`features/handwriting/`)
+Type a line and it is handwritten one pen stroke at a time. Used to make text overlays for videos. The web tool is standalone: it previews and exports settings (JSON) but doesn't make video. Video is made by the internal Mac tool in the Motion repo (`tools/handwriting/`: Handwriting Studio, renderer, DaVinci Resolve menu entry), whose README documents the whole system, its dependencies and plans for a standalone version.
+- **Engine** (`engine/`): a plain-JS copy of the `HandWrite` engine in the Motion repo (`src/scenes/JunyStudios/shared/handwriting/`), with Remotion's helpers swapped for `engine/anim.js`. When the engine changes in Motion, port it here
+  - `geometry.js` lays out letters as pen strokes and builds the lead-in, tail and wobble
+  - `HandWrite.jsx` draws one line as SVG for a given (fractional) frame
+  - `fonts/` holds built-in fonts as stroke data
+  - `fontToStrokes.js` traces an uploaded `.ttf`/`.otf` into strokes in the browser (opentype.js)
+- **Studio** (`HandwritingStudio.jsx`): stage (1920×1080 canvas, scaled), text box, transport, and a DialKit panel configured in `handwritingConfig.js`
+- **Export to video**: the panel's **Export for video (.json)…** button saves the text and settings with `exportSettings()` in `handwritingConfig.js`. In the Motion repo, `npm run handwriting -- file.json` renders that as a transparent ProRes 4444 `.mov` for DaVinci Resolve (Motion's `tools/handwriting/README.md`)
+  - Keep `exportSettings()` keys in step with `handwritingClipSchema` in Motion's `HandwritingClip.tsx`
+  - Every export starts with an `instructions` field (`EXPORT_INSTRUCTIONS`) saying how to render it, so the file can be handed to an agent and rendered straight away; Motion's AGENTS.md has the matching rule
+- Timing is in 30 fps frames. Lead-ins go on the first line only and tails on the last line only; `variation` seeds their shapes (`line-<n>-v<variation>`)
 
 ### Split Panel (`features/gallery/`)
 - Every gallery card opens in a resizable right panel (`GalleryPanel`); below 900px it is a bottom sheet (`GallerySheet`)
@@ -246,6 +262,11 @@ An endless 3D flying game (three.js). The cursor steers a flock of white birds; 
 - Toggle it with `Control + Alt/Option + Shift + W`; press the shortcut again or `Escape` to hide it.
 - Do not add a visible public affordance for these controls unless explicitly requested.
 - Keep this shortcut and `src/app/feelings/window-01/README.md` synchronized if the behavior changes.
+
+### Kalimba accuracy captures
+- `/kalimba` has a hidden capture mode (`Control + Alt/Option + Shift + K`, or `?capture`) that saves raw mic audio with cue times.
+- `node scripts/kalimba/replay.mjs <capture.json>` replays a capture through the current recognition code and prints a confusion table. Use real captures to judge recognition changes; synthetic tests alone don't establish real-world accuracy.
+- Keep the shortcut and `src/features/kalimba/README.md` in sync.
 
 ### Error Boundary
 Locations:
