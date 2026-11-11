@@ -55,6 +55,7 @@ const CAUSES = {
   hawk: 'A hawk took the last one.',
   lightning: 'Lightning found the flock.',
   hunter: 'The hunters were waiting below.',
+  stone: 'A well-thrown stone.',
   wires: 'The power lines were hard to see.',
   turbine: 'The turbine blades kept turning.',
   ground: 'The ground came up too fast.',

@@ -189,6 +189,12 @@ const PAINT_VERT = /* glsl */ `
 #if !defined(USE_MAP) && !defined(USE_TEX)
 attribute vec3 aColor;
 #endif
+#ifdef WALK
+attribute float aWalk; // how far through its stride a walker is, in radians
+#endif
+#ifdef SPIN
+uniform float uHub; // height of the axle the sails turn on
+#endif
 #ifdef FLAP
 attribute vec4 aFlap; // phase, amplitude, sweep, lit boost
 uniform float uShoulder, uArm;
@@ -224,6 +230,23 @@ void main() {
     n = vec3(n.x * cos(an) - n.y * sin(an), n.x * sin(an) + n.y * cos(an), n.z);
   }
   vColor *= 1.0 + aFlap.w;
+#endif
+#ifdef SPIN
+  // Windmill sails: turn about the axle, each mill starting at its own angle.
+  float turn = uTime * 0.7 + instanceMatrix[3].x * 0.37 + instanceMatrix[3].z * 0.21;
+  mat2 rot = mat2(cos(turn), sin(turn), -sin(turn), cos(turn));
+  p.xy = rot * (p.xy - vec2(0.0, uHub)) + vec2(0.0, uHub);
+  n.xy = rot * n.xy;
+#endif
+#ifdef WALK
+  // A walking figure: legs swing from the hip, arms from the shoulder, in opposite step.
+  float stride = sin(aWalk) * sign(p.x);
+  if (p.y < 2.0) {
+    p.z += stride * 0.42 * (2.0 - p.y);
+    p.y += abs(stride) * 0.06 * (2.0 - p.y);
+  } else if (abs(p.x) > 0.62 && p.y < 3.5) {
+    p.z -= stride * 0.3 * (3.45 - p.y);
+  }
 #endif
 #ifdef USE_INSTANCING
   mat4 m = modelMatrix * instanceMatrix;
@@ -354,8 +377,9 @@ void main() {
 #endif
 }`;
 
-export function paintMaterial(U, { map = null, flap = null, doubleSide = false, sway = false, tex = null, leaf = false, ground = null, sharp = false } = {}) {
+export function paintMaterial(U, { map = null, flap = null, doubleSide = false, sway = false, tex = null, leaf = false, ground = null, sharp = false, spin = 0, walk = false } = {}) {
   const defines = {};
+  if (walk) defines.WALK = '';
   if (sharp) defines.SHARP = ''; // stays out of the motion blur (see postMaterial)
   if (sway) defines.SWAY = '';
   if (leaf) defines.LEAF = '';
@@ -365,6 +389,10 @@ export function paintMaterial(U, { map = null, flap = null, doubleSide = false, 
     uniforms.map = { value: map };
     uniforms.uGrass = { value: ground.grass };
     uniforms.uDirt = { value: ground.dirt };
+  }
+  if (spin) {
+    defines.SPIN = '';
+    uniforms.uHub = { value: spin };
   }
   if (tex) {
     defines.USE_TEX = '';

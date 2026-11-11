@@ -90,7 +90,7 @@ export const FLOCK_DIALS = {
   threats: {
     _collapsed: true,
     gap: [1, 0.3, 3, 0.05],
-    aircraftElsewhere: [0.3, 0, 1, 0.01],
+    aircraftElsewhere: [0.45, 0, 1, 0.01],
     airportInterval: [6.5, 2, 20, 0.5],
     invincible: false,
   },

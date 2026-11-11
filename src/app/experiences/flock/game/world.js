@@ -67,6 +67,7 @@ const PROPS = {
   biplane: [12, 0, 0],
   sheep: [500, 0, 0],
   windmill: [12, 3.4, 15],
+  windmill_sails: [12, 0, 0],
   barn: [60, 7, 9.5],
   church: [16, 4.2, 25],
   lighthouse: [10, 2.6, 24],
@@ -267,6 +268,7 @@ export function createWorld(scene, U, kit, { lite, fx: fx_ }) {
             if (special && h > 17 && Math.abs(x) > 26 && Math.abs(x) < 130) {
               special = false;
               put('windmill', x, h, z, 2.6 + pick, 1, WHITE);
+              put('windmill_sails', x, h, z, 2.6 + pick, 1, WHITE, false);
             } else if (p < 0.045) tree(x, h, z, h > 15 ? 'pine' : pick < 0.6 ? 'round' : 'poplar');
             else if (p < 0.085) put('rock', x, h, z, pick * 6.28, 0.6 + pick * 1.2, WHITE);
             else if (p < 0.13) bush(x, h, z);
@@ -396,6 +398,7 @@ export function createWorld(scene, U, kit, { lite, fx: fx_ }) {
   for (let i = 0; i < tuftNormals.count; i++) tuftNormals.setXYZ(i, 0, 1, 0);
   const propMat = paintMaterial(U);
   const swayMat = paintMaterial(U, { sway: true, doubleSide: true });
+  const sailMat = paintMaterial(U, { spin: 11.2, doubleSide: true }); // the height of the axle in build_models.py
   const meshes = {};
   const leafMeshes = {};
   const treeMats = new Map();
@@ -407,7 +410,7 @@ export function createWorld(scene, U, kit, { lite, fx: fx_ }) {
     const tree = kit.trees[name];
     const mesh = tree
       ? new THREE.InstancedMesh(tree.bark, treeMat(tree.barkTex, false), cap)
-      : new THREE.InstancedMesh(kit[name].geometry, name === 'tuft' || name === 'sailboat' ? swayMat : propMat, cap);
+      : new THREE.InstancedMesh(kit[name].geometry, name === 'windmill_sails' ? sailMat : name === 'tuft' || name === 'sailboat' ? swayMat : propMat, cap);
     const colours = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
     mesh.frustumCulled = false;
     mesh.count = 0;
@@ -556,6 +559,7 @@ export function createWorld(scene, U, kit, { lite, fx: fx_ }) {
       c.mesh.material.dispose();
     }
     propMat.dispose();
+    sailMat.dispose();
     swayMat.dispose();
     treeMats.forEach((m) => m.dispose());
     shadeGeo.dispose();

@@ -354,7 +354,27 @@ def build_airliner():
     fin = Matrix.Translation((-0.16, 0, 0)) @ Euler((math.pi / 2, 0, math.pi / 2)).to_matrix().to_4x4()
     b.prism([(-13.2, 1.2), (-17.4, 6.6), (-19.6, 6.6), (-18.6, 1.0)], fin, 0.32, accent)
     for sx in (-1, 1):
-        b.box((sx * 1.86, 1, 0.45), (0.1, 21, 0.34), "#39485a")
+        # A row of cabin windows, a door fore and aft, and a stripe of livery under them.
+        for i in range(26):
+            b.box((sx * 1.88, -9.6 + i * 0.86, 0.5), (0.08, 0.5, 0.36), "#2f3d4d")
+        for y in (11.2, -10.9):
+            b.box((sx * 1.9, y, 0.15), (0.06, 0.8, 1.5), "#d7dce0")
+        b.box((sx * 1.87, 0.4, -0.25), (0.08, 24.5, 0.42), accent)
+        b.box((sx * 1.82, 0.4, -0.62), (0.08, 24.5, 0.16), "#2f4a6b")
+        # Engine pylons, fan faces and exhaust cones.
+        b.box((sx * 6, -0.2, -1.25), (0.3, 3.2, 0.8), body)
+        b.cyl((sx * 6, 1.95, -1.9), (sx * 6, 2.05, -1.9), 0.97, 0.97, "#e7eaec", 12)
+        b.cyl((sx * 6, -2.4, -1.9), (sx * 6, -3.3, -1.9), 0.55, 0.12, "#4a525a", 10)
+        # Flap track fairings, and the lights on the wing tips: red to port, green to starboard.
+        for x, y in ((4.2, -2.5), (9.5, -4.4), (13.5, -5.8)):
+            b.cyl((sx * x, y + 1.2, -1.15), (sx * x, y - 1.4, -1.3), 0.22, 0.08, grey, 6)
+        b.ell((sx * 17.1, -6.0, -0.75), (0.22, 0.3, 0.22), "#ff5a4a" if sx < 0 else "#59e07a", 6, 4)
+    # Cockpit glazing in panes, a nose cone, and the airline's mark on the fin.
+    for x in (-0.75, 0, 0.75):
+        b.box((x, 15.9, 0.95), (0.6, 0.5, 0.45), "#1f2a36", (0.5, 0, 0))
+    b.ell((0, 17.0, -0.1), (0.7, 0.9, 0.7), "#d5dade", 8, 6)
+    b.cyl((-0.2, -16.6, 4.4), (0.2, -16.6, 4.4), 1.15, 1.15, "#f4f1ea", 12)
+    b.ell((0, -19.6, 0.9), (0.35, 0.5, 0.35), "#ffd98a", 6, 4)
     return b.finish("airliner")
 
 
@@ -374,6 +394,24 @@ def build_biplane():
         b.prism([(0.2, -4.2), (2.6, -4.6), (2.6, -5.5), (0.2, -5.5)], trs((0, 0, 0.25)) @ Matrix.Diagonal((sx, 1, 1, 1)), 0.1, cream)
     fin = Matrix.Translation((-0.05, 0, 0)) @ Euler((math.pi / 2, 0, math.pi / 2)).to_matrix().to_4x4()
     b.prism([(-4.0, 0.4), (-5.0, 1.9), (-5.7, 1.9), (-5.6, 0.3)], fin, 0.1, red)
+    # The radial engine's cylinders round the cowl.
+    for i in range(7):
+        a = i * math.tau / 7
+        b.cyl((math.cos(a) * 0.55, 4.0, math.sin(a) * 0.55), (math.cos(a) * 1.15, 4.0, math.sin(a) * 1.15), 0.17, 0.14, "#7d8790", 5)
+    # The pilot: leather helmet, goggles, and a scarf in the slipstream.
+    b.ell((0, -0.5, 1.05), (0.34, 0.36, 0.36), "#6b4a2e", 8, 6)
+    b.box((0, -0.2, 1.1), (0.5, 0.1, 0.16), "#cfe3ea")
+    b.cyl((0.1, -0.8, 0.95), (0.3, -2.3, 1.25), 0.1, 0.04, "#f3efe2", 5)
+    for sx in (-1, 1):
+        # Roundels on the top wing, stripes on the tailplane, bracing wires between the wings.
+        b.cyl((sx * 5.4, 1.7, 1.92), (sx * 5.4, 1.7, 1.94), 0.75, 0.75, "#2f4a8a", 12)
+        b.cyl((sx * 5.4, 1.7, 1.94), (sx * 5.4, 1.7, 1.96), 0.42, 0.42, "#f3efe2", 10)
+        b.box((sx * 1.5, -4.9, 0.37), (0.5, 1.2, 0.04), red)
+        b.cyl((sx * 2.2, 1.1, -0.45), (sx * 5.6, 1.9, 1.8), 0.025, 0.025, "#bfc5c9", 3)
+        b.cyl((sx * 5.6, 1.1, -0.45), (sx * 2.2, 1.9, 1.8), 0.025, 0.025, "#bfc5c9", 3)
+        b.cyl((sx * 1.0, 1.6, -1.75), (sx * 1.25, 1.6, -1.75), 0.3, 0.3, "#d9cfb8", 8)
+    b.cyl((-1.2, 1.6, -1.75), (1.2, 1.6, -1.75), 0.06, 0.06, dark, 5)
+    b.cyl((0, -5.0, 0.1), (0, -5.5, -0.5), 0.05, 0.05, dark, 4)
     return b.finish("biplane")
 
 
@@ -385,21 +423,55 @@ def build_biplane_prop():
 
 
 def build_balloon():
+    """A hot-air balloon: twenty-four gores in a repeating pattern with a zigzag
+    band round the middle, a scalloped skirt, burner and flame, load frame,
+    eight lines, and a wicker basket with two people and its sandbags."""
     b = Builder()
-    cols = ["#e8643c", "#f5efe0", "#f3c75a", "#f5efe0"]
+    cols = ["#e8643c", "#f5efe0", "#f3c75a", "#f5efe0", "#3f7fa6", "#f5efe0"]
+    seg, rings = 24, 18
     prof = [(0.01, 22.5)]
-    for i in range(1, 11):
-        a = i / 10
+    for i in range(1, rings + 1):
+        a = i / rings
         ang = a * math.pi * 0.86
         r = 8.2 * math.sin(ang) * (1 + 0.1 * a)
-        prof.append((r if i < 10 else 2.1, 14 + 8.5 * math.cos(ang) - (1.6 * a ** 3)))
-    prof.append((1.7, 5.4))
-    f = b.lathe((0, 0, 0), prof, 16, lambda s, r: mix(cols[s % 4], "#b8492c" if s % 2 == 0 else "#d9c9a8", 0.55 * max(0, (r - 5) / 6)))
-    b.box((0, 0, 1.1), (2.4, 2.4, 2.0), "#8a5a34")
-    b.box((0, 0, 2.15), (2.7, 2.7, 0.22), "#6b4226")
+        prof.append((r if i < rings else 2.1, 14 + 8.5 * math.cos(ang) - (1.6 * a ** 3)))
+
+    def gore(sg, ring):
+        base = cols[sg % 6]
+        if ring in (7, 8):  # the zigzag band
+            base = "#2f4a6b" if (sg + ring) % 2 == 0 else "#f5efe0"
+        if ring < 2:  # the crown
+            base = "#b8492c"
+        return mix(base, "#8a3a22" if sg % 2 == 0 else "#c9b99a", 0.5 * max(0, (ring - 9) / 9))
+
+    b.lathe((0, 0, 0), prof, seg, gore)
+    # The seams between gores, as thin dark ribs lying on the envelope.
+    for sg in range(0, seg, 2):
+        a = sg / seg * math.tau
+        for i in range(2, rings - 1):
+            (r0, z0), (r1, z1) = prof[i], prof[i + 1]
+            b.cyl((math.cos(a) * r0 * 1.004, math.sin(a) * r0 * 1.004, z0), (math.cos(a) * r1 * 1.004, math.sin(a) * r1 * 1.004, z1), 0.05, 0.05, "#7d3a26", 3)
+    # Skirt, with a scalloped lower edge.
+    b.lathe((0, 0, 0), [(2.1, prof[-1][1]), (1.75, 5.7), (1.7, 5.2)], seg, lambda sg, r: "#3a3f47" if sg % 2 else "#565c66", smooth=False)
+    # Burner, its flame, and the frame that carries the lines.
+    b.cyl((0, 0, 3.7), (0, 0, 4.3), 0.42, 0.5, "#8d949b", 8)
+    b.cyl((0, 0, 4.3), (0, 0, 6.3), 0.42, 0.04, "#ffb347", 8)
+    b.cyl((0, 0, 4.3), (0, 0, 5.4), 0.24, 0.03, "#fff3c4", 6)
     for sx in (-1, 1):
         for sy in (-1, 1):
-            b.cyl((sx * 1.2, sy * 1.2, 2.2), (sx * 1.25, sy * 1.25, 5.5), 0.045, 0.045, "#5a4636", 4)
+            b.cyl((sx * 1.2, sy * 1.2, 2.2), (sx * 0.45, sy * 0.45, 3.75), 0.05, 0.05, "#8d949b", 4)
+    for i in range(8):
+        a = (i + 0.5) / 8 * math.tau
+        b.cyl((math.cos(a) * 1.55, math.sin(a) * 1.55, 2.25), (math.cos(a) * 1.72, math.sin(a) * 1.72, 5.45), 0.035, 0.035, "#5a4636", 3)
+    # Basket: woven bands, a leather rim, sandbags over the side, two people aboard.
+    for i in range(5):
+        b.box((0, 0, 0.22 + i * 0.4), (2.4, 2.4, 0.4), "#8a5a34" if i % 2 == 0 else "#a4703f")
+    b.box((0, 0, 2.2), (2.75, 2.75, 0.24), "#5e3a22")
+    for x, y in ((1.3, 0.5), (-1.3, -0.4), (0.3, 1.3)):
+        b.ell((x, y, 1.2), (0.3, 0.3, 0.42), "#d8cdb4", 6, 5)
+    for x, y, coat in ((0.5, 0.3, "#3f6f8f"), (-0.5, -0.2, "#b8492c")):
+        b.box((x, y, 2.5), (0.7, 0.45, 1.0), coat)
+        b.ell((x, y, 3.25), (0.3, 0.3, 0.32), "#e3b48f", 8, 6)
     return b.finish("balloon")
 
 
@@ -698,24 +770,86 @@ def build_sheep():
 
 
 def build_windmill():
-    """A stone tower mill with four lattice sails."""
+    """A stone tower mill. Its sails are a separate model so the game can turn them."""
     b = Builder()
     b.shade(b.cyl((0, 0, 0), (0, 0, 11), 3.3, 2.3, "#f2ecdf", 12), "#cfc6b4", "#f8f3e8")
     b.cyl((0, 0, 11), (0, 0, 14), 2.7, 0.15, "#6a4a38", 12)
     b.box((0, 3.1, 1.3), (1.3, 0.3, 2.6), "#6f4a33")
     for z in (5, 8.2):
         b.box((0, 2.75 - (z - 5) * 0.09, z), (0.9, 0.3, 1.1), "#57493f")
-    hub = Vector((0, 3.0, 11.2))
-    b.cyl((0, 2.2, 11.2), (0, 3.3, 11.2), 0.45, 0.35, "#57493f", 8)
+    b.cyl((0, 1.6, 11.2), (0, 2.9, 11.2), 0.3, 0.3, "#57493f", 8)
+    # A gallery round the tower and a tail pole behind the cap.
+    b.cyl((0, 0, 4.2), (0, 0, 4.45), 3.9, 3.9, "#8a6a4a", 12)
+    b.cyl((0, -2.4, 12.2), (0, -6.2, 6.5), 0.12, 0.1, "#6a4a38", 5)
+    return b.finish("windmill")
+
+
+WINDMILL_HUB = (0, 3.0, 11.2)  # the sails turn about the Y axis through this point
+
+
+def build_windmill_sails():
+    """Four lattice sails on their hub, in the windmill's own coordinates."""
+    b = Builder()
+    hub = Vector(WINDMILL_HUB)
+    b.cyl((0, 2.75, 11.2), (0, 3.35, 11.2), 0.5, 0.36, "#57493f", 8)
     for i in range(4):
-        a = 0.35 + i * math.pi / 2
+        a = i * math.pi / 2
         along = Vector((math.sin(a), 0, math.cos(a)))
         side = Vector((math.cos(a), 0, -math.sin(a)))
         b.box(hub + along * 5.0, (0.24, 0.14, 10), "#7a5a3c", (0, a, 0))
         b.box(hub + along * 6.0 + side * 0.95 + Vector((0, 0.05, 0)), (1.7, 0.06, 7.6), "#efe6d2", (0, a, 0))
         for k in range(5):
             b.box(hub + along * (2.8 + k * 1.6) + side * 0.95 + Vector((0, 0.1, 0)), (1.8, 0.08, 0.1), "#7a5a3c", (0, a, 0))
-    return b.finish("windmill")
+    return b.finish("windmill_sails")
+
+
+def person(b, shirt, trousers, hair, scale=1.0, big_head=1.0, raise_arm=False):
+    """A standing figure facing +Y, feet at the origin, about 4.6 tall at scale 1.
+    The game swings the legs (below z = 2) and the arms (|x| > 0.62) to make it walk,
+    so limbs hang straight and nothing else may enter those regions."""
+    skin, shoe = "#e3b48f", "#2e2925"
+    k = scale
+    for sx in (-1, 1):
+        b.cyl((sx * 0.3 * k, 0, 2.0 * k), (sx * 0.3 * k, 0, 0.2 * k), 0.26 * k, 0.2 * k, trousers, 7)
+        b.box((sx * 0.3 * k, 0.14 * k, 0.11 * k), (0.42 * k, 0.8 * k, 0.22 * k), shoe)
+        top = (sx * 0.8 * k, 0, 3.4 * k)
+        end = (sx * 0.95 * k, 0.5 * k, 4.6 * k) if raise_arm and sx > 0 else (sx * 0.84 * k, 0, 2.05 * k)
+        b.cyl(top, end, 0.19 * k, 0.15 * k, shirt, 6)
+        b.ell(end, (0.17 * k, 0.17 * k, 0.2 * k), skin, 6, 5)
+    b.shade(b.ell((0, 0, 2.82 * k), (0.62 * k, 0.37 * k, 0.98 * k), shirt, 10, 8), mix(shirt, "#000000", 0.2), shirt)
+    b.box((0, 0, 2.05 * k), (0.92 * k, 0.5 * k, 0.5 * k), trousers)
+    b.cyl((0, 0, 3.55 * k), (0, 0, 3.8 * k), 0.16 * k, 0.16 * k, skin, 6)
+    h = 0.42 * k * big_head
+    b.ell((0, 0.02 * k, 3.8 * k + h), (h, h, h * 1.1), skin, 10, 8)
+    b.ell((0, -0.08 * k, 3.8 * k + h * 1.25), (h * 1.04, h * 1.04, h * 0.85), hair, 10, 6)
+
+
+def build_walker():
+    """Someone out for a walk. The shirt is near white so the game can tint each one."""
+    b = Builder()
+    person(b, "#f1f1ee", "#4a5568", "#4a3628")
+    return b.finish("walker")
+
+
+def build_child():
+    """A child with one arm back, about to throw."""
+    b = Builder()
+    person(b, "#e8a23c", "#3f5f8f", "#6b4a2e", scale=0.66, big_head=1.25, raise_arm=True)
+    return b.finish("child")
+
+
+def build_fish():
+    """A leaping fish, nose toward +Y, about three long."""
+    b = Builder()
+    back, belly = "#5f7f8a", "#e9eef0"
+    b.tube([(1.5, 0, 0.03), (1.25, 0.02, 0.2, 0.26), (0.6, 0.04, 0.32, 0.46), (-0.2, 0.03, 0.3, 0.44), (-0.9, 0, 0.17, 0.26), (-1.3, 0, 0.06, 0.12)], 8,
+           lambda i, q: mix(belly, back, 0.5 + 0.5 * math.sin((q + 0.5) / 8 * math.tau)))
+    side = Matrix.Translation((-0.03, 0, 0)) @ Euler((math.pi / 2, 0, math.pi / 2)).to_matrix().to_4x4()
+    b.prism([(-1.25, 0), (-1.85, 0.55), (-1.6, 0), (-1.85, -0.55)], side, 0.06, "#c96a4a")
+    b.prism([(0.4, 0.42), (-0.3, 0.42), (-0.5, 0.75), (0.1, 0.8)], side, 0.06, "#4d6973")
+    b.ell((0.2, 1.15, 0.1), (0.05, 0.07, 0.07), "#1f2a30", 5, 4)
+    b.ell((-0.2, 1.15, 0.1), (0.05, 0.07, 0.07), "#1f2a30", 5, 4)
+    return b.finish("fish")
 
 
 def build_barn():
@@ -820,7 +954,8 @@ def build_haystack():
 
 BUILDERS = [build_bird, build_hawk, build_airliner, build_biplane, build_biplane_prop, build_balloon,
             build_tuft, build_cow, build_sailboat, build_house, build_house2, build_house3, build_house4, build_house5, build_barn, build_church,
-            build_terminal, build_control_tower, build_hangar, build_sheep, build_windmill,
+            build_terminal, build_control_tower, build_hangar, build_sheep, build_windmill, build_windmill_sails,
+            build_walker, build_child, build_fish,
             build_lighthouse, build_turbine_tower, build_turbine_rotor, build_pylon, build_hunter,
             build_rock, build_haystack]
 

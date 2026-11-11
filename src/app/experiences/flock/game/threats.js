@@ -3,7 +3,7 @@
 // storms) are dodged sideways or by diving; threats near the ground (hunters,
 // power lines, turbines, and the land itself) only reach a flock flying low.
 import * as THREE from 'three';
-import { AIRFIELD, BIOME, airportNear, biomeAt, floorAt, heightAt, relAt } from './ground';
+import { AIRFIELD, BIOME, airportNear, biomeAt, floorAt, heightAt, relAt, townRoad } from './ground';
 import { CRUISE, MAX_BIRDS } from './flock';
 import { paintMaterial } from './materials';
 import { clamp, damp, lerp } from './noise';
@@ -75,7 +75,8 @@ export function createThreats(G) {
     let t = 0;
     let heard = false;
     const it = {
-      big, kind: 'plane', warn: 'plane', x, y, z, hits: 0, max: big ? 2 : 1, reach: 60, behind: vz < 0, dead: false,
+      big, kind: 'plane', warn: 'plane', x, y, z, hits: 0, max: big ? 4 : 2, reach: 60, behind: vz < 0, dead: false,
+      solid: () => SHAPES[kind].map((s) => [it.x + s[0] * cs + s[2] * sn, it.y + s[1], it.z - s[0] * sn + s[2] * cs, s[3]]),
       update(dt) {
         if (it.dead) return false;
         t += dt;
@@ -137,7 +138,8 @@ export function createThreats(G) {
     let heard = false;
     let puff = 0;
     const it = {
-      big, kind: 'plane', warn: null, x, y, z, hits: 0, max: big ? 2 : 1, reach: 60, behind: dir < 0 && z > flock.ctrl.z, dead: false,
+      big, kind: 'plane', warn: null, x, y, z, hits: 0, max: big ? 4 : 2, reach: 60, behind: dir < 0 && z > flock.ctrl.z, dead: false,
+      solid: () => SHAPES[kind].map((s) => [x + s[0] * cs + s[2] * sn, y + s[1], z - s[0] * sn + s[2] * cs, s[3]]),
       update(dt) {
         const c = flock.ctrl;
         let aim = 0;
@@ -204,7 +206,8 @@ export function createThreats(G) {
     const along = rand(-2, 3);
     let t = 0;
     const it = {
-      kind: 'balloon', warn: 'balloon', x, y, z, hits: 0, max: 1, reach: 30,
+      kind: 'balloon', warn: 'balloon', x, y, z, hits: 0, max: 3, reach: 30,
+      solid: () => [[it.x, it.y, it.z, 9.3], [it.x, it.y - 12.3, it.z, 3]],
       update(dt) {
         t += dt;
         it.y = y + Math.sin(t * 0.5 + ph) * 2.6;
@@ -359,7 +362,9 @@ export function createThreats(G) {
       update(dt) {
         const c = flock.ctrl;
         const ahead = c.z - z;
-        const inRange = ahead > 12 && ahead < 150 && c.y < 36 && Math.abs(x - c.x) < 100 && flock.birds.length > 0;
+        // A low flock is an easy mark; one at cruising height is in reach, but the shot scatters more.
+        const inRange = ahead > 12 && ahead < 150 && c.y < 78 && Math.abs(x - c.x) < 100 && flock.birds.length > 0;
+        const scatter = 1 + clamp((c.y - 30) / 30) * 2.2;
         if (inRange) mesh.rotation.y = Math.atan2(x - flock.leader.x, z - flock.leader.z);
         const tip = v3.set(0.05, 5.4, -2.8).applyAxisAngle(THREE.Object3D.DEFAULT_UP, mesh.rotation.y).add(mesh.position);
         cool -= dt;
@@ -375,8 +380,8 @@ export function createThreats(G) {
               to.copy(target.pos).addScaledVector(target.vel, tt);
               tt = from.distanceTo(to) / 95;
             }
-            to.x += rand(-1.6, 1.6);
-            to.y += rand(-1.2, 1.2);
+            to.x += rand(-1.6, 1.6) * scatter;
+            to.y += rand(-1.2, 1.2) * scatter;
             shots.push({ pos: from, vel: to.sub(from).normalize().multiplyScalar(95), life: 0, owner: it });
             fx.burst(8, { x: from.x, y: from.y, z: from.z, vy: 3, life: 1.1, size: 3, grow: 2, color: [0.92, 0.9, 0.86], alpha: 0.5, drag: 2 }, 0.6, 5);
             audio.shot(clamp(1 - ahead / 200));
@@ -384,6 +389,43 @@ export function createThreats(G) {
           }
         } else if (inRange && cool <= 0) {
           aim = 0.55;
+        }
+        return z < c.z + 120;
+      },
+      test: () => false,
+      remove: () => scene.remove(mesh),
+    };
+    return it;
+  }
+
+  // ------------------------------------------------------------- children
+  // A child in a town street, throwing stones at a flock that comes down low.
+  function child(x, z) {
+    const mesh = mk('child');
+    const y = heightAt(x, z);
+    mesh.position.set(x, y - 0.1, z);
+    mesh.rotation.y = Math.PI;
+    let cool = rand(0.3, 1.2);
+    const it = {
+      kind: 'child', warn: null, x, y, z, hits: 0, max: 99, reach: 0,
+      update(dt) {
+        const c = flock.ctrl;
+        const ahead = c.z - z;
+        const inRange = ahead > 8 && ahead < 120 && c.y < 48 && Math.abs(x - c.x) < 75 && flock.birds.length > 0;
+        if (inRange) mesh.rotation.y = Math.atan2(x - flock.leader.x, z - flock.leader.z);
+        cool -= dt;
+        if (inRange && cool <= 0) {
+          cool = rand(1.1, 2.0) / (1 + G.level * 0.05);
+          const target = pick(flock.birds);
+          const from = new THREE.Vector3(x, y + 3.2, z);
+          // Lobbed: aim where the bird will be when the stone gets there.
+          const t = clamp(from.distanceTo(target.pos) / 46, 0.6, 2.4);
+          const to = target.pos.clone().addScaledVector(target.vel, t);
+          to.x += rand(-2.2, 2.2);
+          to.y += rand(-1.5, 1.5);
+          const vel = to.sub(from).divideScalar(t);
+          vel.y += 0.5 * STONE_G * t;
+          shots.push({ pos: from, vel, life: 0, owner: it, stone: true });
         }
         return z < c.z + 120;
       },
@@ -486,6 +528,7 @@ export function createThreats(G) {
   }
 
   // ----------------------------------------------------------------- director
+  const STONE_G = 30; // how hard a thrown stone is pulled down
   const D = { air: 0, ground: 0, stray: 0, traffic: 0, moves: 0 };
   // How close each kind may pass and still count as a near miss.
   const NEAR = { plane: 12, airliner: 22, balloon: 13 };
@@ -497,6 +540,7 @@ export function createThreats(G) {
     const lv = G.level;
     const c = flock.ctrl;
     const options = ['balloons', 'biplane', 'biplane'];
+    if (G.dist > 600) options.push('hawk');
     if (lv >= 1) options.push('airliner', 'hawk', 'crosser', 'behind');
     if (lv >= 2) options.push('storm', 'hawk', 'behind');
     if (lv >= 3) options.push('storm', 'airliner');
@@ -504,7 +548,7 @@ export function createThreats(G) {
     // Away from an airport the sky is mostly empty of aircraft.
     if (AIRCRAFT.includes(what) && Math.random() > TUNE.threats.aircraftElsewhere) what = pick(lv >= 2 ? ['balloons', 'hawk', 'hawk', 'storm'] : lv >= 1 ? ['balloons', 'hawk'] : ['balloons']);
     if (lv >= 2 && Math.random() < 0.045) what = 'crash';
-    let gap = lerp(430, 200, clamp(lv / 11)) * rand(0.8, 1.25);
+    let gap = lerp(330, 160, clamp(lv / 11)) * rand(0.8, 1.25);
     const lane = (spread) => clamp(c.x + rand(-spread, spread), -xr, xr);
     // Jets cruise high: a flock that has climbed out of the way of everything else meets them there.
     const jetLevel = () => (c.high > 0.5 ? c.y : CRUISE);
@@ -512,7 +556,9 @@ export function createThreats(G) {
       case 'balloons': {
         // Strung out along the route and across more than its width, never in a tight knot.
         const n = 3 + Math.min(2, Math.floor(lv / 3));
-        for (let i = 0; i < n; i++) add(balloon(lerp(-xr * 1.25, xr * 1.25, (i + rand(0.2, 0.8)) / n), CRUISE + rand(-6, 9), z - i * rand(70, 110) - rand(0, 40)));
+        // One of them always hangs in the flock's own lane.
+        const mine = Math.floor(Math.random() * n);
+        for (let i = 0; i < n; i++) add(balloon(i === mine ? lane(5) : lerp(-xr * 1.25, xr * 1.25, (i + rand(0.2, 0.8)) / n), CRUISE + (i === mine ? rand(-2, 3) : rand(-6, 9)), z - i * rand(70, 110) - rand(0, 40)));
         gap += n * 60;
         break;
       }
@@ -554,15 +600,28 @@ export function createThreats(G) {
 
   function groundEvent(z) {
     const lv = G.level;
-    const options = { [BIOME.FARM]: ['hunters', 'pylons', 'turbines'], [BIOME.TOWN]: ['pylons'], [BIOME.MEADOW]: ['turbines', 'hunters'], [BIOME.FOREST]: ['hunters'], [BIOME.HILLS]: ['hunters', 'turbines'], [BIOME.BASIN]: ['hunters'] }[biomeAt(z)];
+    const options = { [BIOME.FARM]: ['hunters', 'pylons', 'turbines'], [BIOME.TOWN]: ['pylons', 'children', 'children'], [BIOME.MEADOW]: ['turbines', 'hunters'], [BIOME.FOREST]: ['hunters'], [BIOME.HILLS]: ['hunters', 'turbines'], [BIOME.BASIN]: ['hunters'] }[biomeAt(z)];
     if (!options) return;
     const what = pick(options);
     if (what === 'hunters') {
-      const n = Math.min(4, 1 + Math.floor(lv / 3) + (Math.random() < 0.5 ? 1 : 0));
+      // The forest is the hunters' own ground: more of them there, and closer to the route.
+      const woods = biomeAt(z) === BIOME.FOREST;
+      const n = Math.min(5, (woods ? 3 : 1) + Math.floor(lv / 3) + (Math.random() < 0.5 ? 1 : 0));
       for (let i = 0; i < n; i++) {
-        const x = rand(-55, 55);
+        const x = woods ? rand(-38, 38) : rand(-55, 55);
         const hz = z - i * rand(35, 70);
         if (dry(x, hz)) add(hunter(x, hz));
+      }
+    } else if (what === 'children') {
+      // A few children along the streets nearest the route.
+      let found = 0;
+      for (let tries = 0; tries < 40 && found < 3 + Math.min(2, Math.floor(lv / 3)); tries++) {
+        const x = rand(-48, 48);
+        const cz = z - rand(0, 150);
+        if (townRoad(x, cz) < 3 && dry(x, cz)) {
+          add(child(x, cz));
+          found++;
+        }
       }
     } else if (what === 'pylons') {
       add(pylons(z, rand(-0.3, 0.3)));
@@ -599,7 +658,8 @@ export function createThreats(G) {
     }
     if (dist > D.ground) {
       groundEvent(z + 60);
-      D.ground = dist + rand(250, 420) * (sky.inStorm(z) ? 0.55 : 1) * lerp(1, 0.7, clamp(G.level / 10));
+      const busy = biomeAt(z) === BIOME.FOREST || biomeAt(z) === BIOME.TOWN ? 0.55 : 1;
+      D.ground = dist + rand(250, 420) * busy * (sky.inStorm(z) ? 0.55 : 1) * lerp(1, 0.7, clamp(G.level / 10));
     }
     if (dist > D.stray) {
       D.stray = dist + 330 + flock.birds.length * 40 + rand(0, 160);
@@ -649,6 +709,25 @@ export function createThreats(G) {
         // A jet close by shakes the air.
         if (it.big) G.shake = Math.max(G.shake, 0.45 * (1 - clamp(Math.hypot(it.x - c.x, it.y - c.y, it.z - c.z) / 60)));
       }
+      // Nothing flies through a balloon or an aircraft: a bird that is not knocked
+      // down is shouldered aside, so the flock parts round it.
+      if (it.solid && Math.abs(it.z - c.z) < it.reach + 20) {
+        for (const s of it.solid()) {
+          for (const b of flock.birds) {
+            const dx = b.pos.x - s[0];
+            const dy = b.pos.y - s[1];
+            const dz = b.pos.z - s[2];
+            const d = Math.hypot(dx, dy, dz) || 1;
+            const r = s[3] + 1.4;
+            if (d < r) {
+              const push = (r - d) / d;
+              b.pos.x += dx * push;
+              b.pos.y += dy * push * 0.6;
+              b.pos.z += dz * push * 0.3;
+            }
+          }
+        }
+      }
       if (!playing || it.hits >= it.max || Math.abs(it.z - c.z) > it.reach + 40) continue;
       for (const b of [...flock.birds]) {
         if (it.hits < it.max && it.test(b)) G.hit(b, it.kind, it);
@@ -661,13 +740,16 @@ export function createThreats(G) {
     for (let i = shots.length - 1; i >= 0; i--) {
       const s = shots[i];
       s.life += dt;
+      if (s.stone) s.vel.y -= STONE_G * dt;
       s.pos.addScaledVector(s.vel, dt);
-      fx.spawn({ x: s.pos.x, y: s.pos.y, z: s.pos.z, life: 0.28, size: 1.5, color: [1, 0.93, 0.7], alpha: 0.95 });
-      let done = s.life > 1.6;
+      // A shot leaves a bright streak; a stone is a small dark thing with a short tail.
+      if (s.stone) fx.spawn({ x: s.pos.x, y: s.pos.y, z: s.pos.z, life: 0.16, size: 1.5, color: [0.33, 0.31, 0.29], alpha: 1 });
+      else fx.spawn({ x: s.pos.x, y: s.pos.y, z: s.pos.z, life: 0.28, size: 1.5, color: [1, 0.93, 0.7], alpha: 0.95 });
+      let done = s.life > (s.stone ? 3 : 1.6);
       if (playing && !done) {
         for (const b of flock.birds) {
           if (near(b, s.pos.x, s.pos.y, s.pos.z, 2.1)) {
-            G.hit(b, 'hunter', s.owner);
+            G.hit(b, s.stone ? 'stone' : 'hunter', s.owner);
             done = true;
             break;
           }
@@ -722,5 +804,5 @@ export function createThreats(G) {
     wireMat.dispose();
   }
 
-  return { update, warnings, reset, dispose, items, materials: [mat, airMat], spawn: { add, plane, flight, balloon, hawk, storm, hunter, pylons, turbine, crash } };
+  return { update, warnings, reset, dispose, items, materials: [mat, airMat], spawn: { add, plane, flight, balloon, hawk, storm, hunter, child, pylons, turbine, crash } };
 }

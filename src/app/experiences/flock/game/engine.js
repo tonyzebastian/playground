@@ -9,10 +9,12 @@ import { loadKit, loadTrees } from './assets';
 import { createAudio } from './audio';
 import { createCine } from './cine';
 import { CRUISE, createFlock } from './flock';
+import { createFish } from './fish';
 import { createFx } from './fx';
 import { START_Z, heightAt } from './ground';
 import { blurMaterial, brightMaterial, createUniforms, postMaterial, raysMaterial } from './materials';
 import { clamp, damp, lerp, smoothstep } from './noise';
+import { createPeople } from './people';
 import { createSky } from './sky';
 import { createThreats } from './threats';
 import { LOOKS, TUNE } from './tuning';
@@ -126,6 +128,8 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
   const G = { scene, U, kit, fx, world, sky, flock, audio, camera, lite, level: 0, dist: 0, shake: 0, hit, moment };
   const cine = createCine();
   const threats = createThreats(G);
+  const people = createPeople(scene, U, kit, { lite });
+  const fish = createFish(scene, U, kit, fx, { lite });
 
   // Build every threat's shader now, with the scene's own target bound, so the
   // first balloon or aircraft does not cost a frame.
@@ -187,7 +191,7 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
     if (state !== 'play' || (invuln > 0 && !force) || G.god || TUNE.threats.invincible || viewNow().cine) return;
     if (item) item.hits++;
     const left = flock.lose(bird, (Math.random() - 0.5) * 14, 5, 12);
-    invuln = 0.75;
+    invuln = 0.4;
     stopT = 0.09;
     hurt = 1;
     G.shake = 1;
@@ -221,6 +225,7 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
     recruited = 0;
     invuln = 2;
     threats.reset();
+    people.reset();
     sky.reset();
     flock.reset(START_BIRDS, startZ);
     onEvent('state', { state });
@@ -320,7 +325,9 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
       G.level = Math.floor(G.dist / 1100);
       invuln -= dt;
     }
-    threats.update(dt, xr, playing && !watching); // nothing new is sent at a flock that is only being filmed
+    threats.update(dt, xr, playing && !watching);
+    people.update(dt, c.z);
+    fish.update(dt, c.z); // nothing new is sent at a flock that is only being filmed
     const joined = flock.takeJoined();
     if (joined) {
       recruited += joined;
@@ -495,6 +502,8 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
       stop();
       document.removeEventListener('visibilitychange', onVisibility);
       threats.dispose();
+      people.dispose();
+      fish.dispose();
       flock.dispose();
       sky.dispose();
       world.dispose();
