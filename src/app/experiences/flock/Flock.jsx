@@ -393,7 +393,7 @@ export default function Flock({ game = false }) {
           </div>
 
           {hint && (
-            <p className={`${pill} pointer-events-none absolute left-1/2 top-28 z-40 -translate-x-1/2 whitespace-nowrap px-4 py-2 text-[12px] font-medium tracking-wide sm:top-24`}>
+            <p className={`${pill} pointer-events-none absolute left-1/2 top-20 z-40 -translate-x-1/2 whitespace-nowrap px-4 py-2 text-[12px] font-medium tracking-wide sm:top-14`}>
               {hint}
             </p>
           )}
