@@ -64,8 +64,13 @@ const push = (typed) => {
   return at;
 };
 
+// Every tree and bush is also baked as `<name>_far`: the same plant at a
+// fraction of the triangles, for the ones that stand well off the flight path.
+const FAR = 0.22;
+const jobs = Object.entries(TREES).flatMap(([name, t]) => [[name, t], [`${name}_far`, [...t.slice(0, 5), (t[5] ?? 1) * (name.startsWith('bush') ? 0.4 : FAR)]]]).filter(([name]) => name !== 'bush_far'); // Bush 1 does not thin; far bushes all use bush2_far
+
 const manifest = {};
-for (const [name, [preset, seed, height, keep, grow, budget = 1]] of Object.entries(TREES)) {
+for (const [name, [preset, seed, height, keep, grow, budget = 1]] of jobs) {
   const tree = new Tree();
   tree.loadPreset(preset);
   const o = tree.options;

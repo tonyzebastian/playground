@@ -488,7 +488,7 @@ export function createThreats(G) {
   // ----------------------------------------------------------------- director
   const D = { air: 0, ground: 0, stray: 0, traffic: 0, moves: 0 };
   // How close each kind may pass and still count as a near miss.
-  const NEAR = { plane: 13, airliner: 24, balloon: 16, hawk: 8 };
+  const NEAR = { plane: 12, airliner: 22, balloon: 13 };
   const AIRCRAFT = ['biplane', 'crosser', 'airliner', 'behind'];
   const add = (it) => it && items.push(it);
   const dry = (x, z) => relAt(x, z) > 1.2;
@@ -722,5 +722,5 @@ export function createThreats(G) {
     wireMat.dispose();
   }
 
-  return { update, warnings, reset, dispose, items, spawn: { add, plane, flight, balloon, hawk, storm, hunter, pylons, turbine, crash } };
+  return { update, warnings, reset, dispose, items, materials: [mat, airMat], spawn: { add, plane, flight, balloon, hawk, storm, hunter, pylons, turbine, crash } };
 }

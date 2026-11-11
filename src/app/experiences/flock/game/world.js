@@ -74,6 +74,14 @@ const PROPS = {
   haystack: [300, 0, 0],
 };
 
+// Plants further than this to either side of the route are drawn from the
+// low-detail `_far` meshes (scripts/flock/bake_trees.mjs): the flock never gets close to them.
+const FAR_FROM_ROUTE = 110;
+for (const name of Object.keys(PROPS)) {
+  if (name.startsWith('tree_')) PROPS[`${name}_far`] = [...PROPS[name]];
+}
+PROPS.bush2_far = [5200, 0, 0];
+
 export function createWorld(scene, U, kit, { lite, fx: fx_ }) {
   const { drop: BASIN_DROP, fall: BASIN_FALL } = BASIN;
   const NX = lite ? 72 : 104;
@@ -201,9 +209,12 @@ export function createWorld(scene, U, kit, { lite, fx: fx_ }) {
       const set = autumn ? TINT.autumn : name === 'tree_birch' ? TINT.birch : TINT[kind];
       const c = set[Math.floor(r() * set.length)];
       const v = 0.85 + r() * 0.3;
-      put(name, x, y, z, r() * 6.28, 0.7 + r() * 0.65, [c[0] * v, c[1] * v, c[2] * v]);
+      put(Math.abs(x) > FAR_FROM_ROUTE ? `${name}_far` : name, x, y, z, r() * 6.28, 0.7 + r() * 0.65, [c[0] * v, c[1] * v, c[2] * v]);
     };
-    const bush = (x, y, z, hedge) => put(hedge || r() < 0.7 ? 'bush' : 'bush2', x, y, z, r() * 6.28, 0.6 + r() * 0.9, TINT.bush[Math.floor(r() * 4)]);
+    const bush = (x, y, z, hedge) => {
+      const name = hedge || r() < 0.7 ? 'bush' : 'bush2';
+      put(Math.abs(x) > FAR_FROM_ROUTE ? 'bush2_far' : name, x, y, z, r() * 6.28, (0.6 + r() * 0.9) * (Math.abs(x) > FAR_FROM_ROUTE && name === 'bush' ? 0.6 : 1), TINT.bush[Math.floor(r() * 4)]);
+    };
     const herd = (x, z) => {
       const n = 3 + Math.floor(r() * 4);
       for (let i = 0; i < n; i++) {
@@ -510,7 +521,7 @@ export function createWorld(scene, U, kit, { lite, fx: fx_ }) {
         if (Math.abs(fz - z) > 520) continue;
         const foot = fz === falls[0][0] ? fz - BASIN_FALL - 4 : fz + BASIN_FALL + 4;
         for (let i = 0; i < 2; i++) {
-          fx_.spawn({ x: fx + (Math.random() - 0.5) * 26, y: -BASIN_DROP + 2, z: foot + (Math.random() - 0.5) * 10, vy: 5 + Math.random() * 7, vz: fz === falls[0][0] ? -3 : 3, life: 2.2, size: 13, grow: 2.5, color: [1, 1, 1], alpha: 0.2, drag: 0.6 });
+          fx_.spawn({ x: fx + (Math.random() - 0.5) * 26, y: -BASIN_DROP + 2, z: foot + (Math.random() - 0.5) * 10, vy: 5 + Math.random() * 7, vz: fz === falls[0][0] ? -3 : 3, life: 2.2, size: 11, grow: 2.5, color: [0.85, 0.87, 0.9], alpha: 0.08, drag: 0.6 });
         }
       }
     }

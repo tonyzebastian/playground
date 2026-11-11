@@ -127,6 +127,15 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
   const cine = createCine();
   const threats = createThreats(G);
 
+  // Build every threat's shader now, with the scene's own target bound, so the
+  // first balloon or aircraft does not cost a frame.
+  const warm = threats.materials.map((m) => new THREE.Mesh(kit.balloon.geometry, m));
+  warm.forEach((o) => scene.add(o));
+  renderer.setRenderTarget(target);
+  renderer.compile(scene, camera);
+  renderer.setRenderTarget(null);
+  warm.forEach((o) => scene.remove(o));
+
   let state = 'attract'; // attract | play | over
   let time = 0;
   let startZ = 0;
@@ -145,6 +154,17 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
   let camUp = 1;
   let camRoll = 0;
   let lastX = 0;
+  const MAX_PIXELS = 4.4e6;
+  const full = [4, 4]; // the canvas in device pixels
+  let res = 1;
+  let resTop = 1;
+  let slowSum = 0;
+  let slowN = 0;
+  let steady = 0;
+  let sinceUp = 99;
+  let upFails = 0;
+  let frameNo = 0;
+  let lastNear = -99;
   let stopT = 0; // the world holds still for a moment when a bird is lost
   let slowT = 0; // and slows as something only just misses
   let punch = 0;
@@ -183,8 +203,10 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
 
   // Something worth the camera's attention. 'near': a threat only just missed.
   function moment(kind) {
-    if (kind !== 'near' || reduced || slowT > 0) return;
-    slowT = 0.6;
+    // Brief and slight, and not again for a while: it should be felt, not noticed.
+    if (kind !== 'near' || reduced || time - lastNear < 8) return;
+    lastNear = time;
+    slowT = 0.35;
     punch = 1;
   }
 
@@ -216,24 +238,65 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
     const dpr = Math.min(window.devicePixelRatio || 1, preview ? 1.25 : lite ? 1.6 : 2);
     renderer.setPixelRatio(dpr);
     renderer.setSize(w, h, false);
-    target.setSize(Math.round(w * dpr), Math.round(h * dpr));
-    if (hdr) {
-      const qw = Math.max(2, Math.round((w * dpr) / 4));
-      const qh = Math.max(2, Math.round((h * dpr) / 4));
-      for (const t of [glowA, glowB, raysT]) t.setSize(qw, qh);
-      bright.uniforms.uTexel.value.set(1 / (w * dpr), 1 / (h * dpr));
-    }
+    full[0] = w * dpr;
+    full[1] = h * dpr;
+    // A very large window starts below full resolution: the scene is never drawn at more than MAX_PIXELS.
+    res = Math.min(1, Math.sqrt(MAX_PIXELS / (full[0] * full[1])));
+    resTop = res;
+    sizeTargets();
     aspect = w / h;
     camera.aspect = aspect;
     // The gallery card sits closer, so the flock still reads at thumbnail size.
     zoom = clamp(1.15 / aspect, 1, 1.7) * (preview ? 0.6 : 1);
     xr = Math.min(42, 28.6 * zoom * aspect * 0.8);
-    post.uniforms.uTexel.value.set(1 / (w * dpr), 1 / (h * dpr));
     post.uniforms.uAspect.value = aspect;
-    fx.setViewport(h * dpr, 50);
   }
 
+  // The scene is drawn at `res` times the canvas's own resolution and scaled up
+  // by the final pass, so the picture can give up pixels to hold its frame rate.
+  function sizeTargets() {
+    const w = Math.max(2, Math.round(full[0] * res));
+    const h = Math.max(2, Math.round(full[1] * res));
+    target.setSize(w, h);
+    if (hdr) {
+      for (const t of [glowA, glowB, raysT]) t.setSize(Math.max(2, Math.round(w / 4)), Math.max(2, Math.round(h / 4)));
+      bright.uniforms.uTexel.value.set(1 / w, 1 / h);
+    }
+    post.uniforms.uTexel.value.set(1 / w, 1 / h);
+    fx.setViewport(h, 50);
+  }
+
+  // Holding the frame rate: when frames run long for a second the scene drops a
+  // step of resolution; after a long steady spell it tries one step back up,
+  // and stops trying once that has failed twice.
+  function adapt(real) {
+    if (time < 4 || real >= 0.05) return; // not while loading, nor on a stall
+    slowSum += real;
+    slowN++;
+    if (slowSum < 1) return;
+    const average = slowSum / slowN;
+    slowSum = slowN = 0;
+    steady = average > 1 / 52 ? 0 : steady + 1;
+    if (average > 1 / 52 && res > 0.5) {
+      if (sinceUp < 6) upFails++;
+      res = Math.max(0.5, res * 0.86);
+      sizeTargets();
+    } else if (steady >= 20 && res < resTop && upFails < 2) {
+      res = Math.min(resTop, res / 0.86);
+      steady = 0;
+      sinceUp = 0;
+      sizeTargets();
+    }
+    sinceUp++;
+  }
+
+  // Development only: per-frame cost, read from window.__flock.perf.
+  const perf = process.env.NODE_ENV !== 'production' ? { js: [], gap: [], calls: 0, tris: 0, on: false } : null;
+  if (perf) renderer.info.autoReset = false;
+
   function frame(real) {
+    const began = perf && perf.on ? performance.now() : 0;
+    if (perf) renderer.info.reset();
     // Time itself is part of the camera work: a held breath on a loss, slow motion on a near miss.
     stopT -= real;
     slowT -= real;
@@ -328,7 +391,9 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
     hurt *= Math.exp(-dt * 2.2);
     post.uniforms.uHurt.value = hurt;
     post.uniforms.uSpeed.value = reduced ? 0 : e;
-    if (shadowTarget) renderShadows(c.x * 0.6, c.z - 70);
+    // The sun's shadow map is redrawn every other frame: it follows the flock in
+    // whole texels, so a frame-old map lines up exactly.
+    if (shadowTarget && frameNo++ % 2 === 0) renderShadows(c.x * 0.6, c.z - 70);
     renderer.setRenderTarget(target);
     renderer.render(scene, camera);
     if (hdr) {
@@ -357,7 +422,7 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
       post.uniforms.uFx.value.set(g.bloom, sunSeen * g.godRays, reduced || jump ? 0 : g.motionBlur * lerp(0.35, 1, e) * Math.min(2, 1 / 60 / Math.max(real, 1e-3)));
       // Depth of field: off in the overhead view (everything there is the same distance away),
       // gentle in the chase views, shallow through the cine camera's long lenses.
-      const px = renderer.getPixelRatio() * 6 * g.depthOfField * (watching ? 1.5 : e);
+      const px = renderer.getPixelRatio() * res * 6 * g.depthOfField * (watching ? 1.5 : e);
       post.uniforms.uDof.value.set(focus, focus * (watching ? 1.6 : 5), focus * (watching ? 8 : 45), px);
       post.uniforms.uNearFar.value.set(camera.near, camera.far);
       post.uniforms.uPrevViewProj.value.copy(viewProj);
@@ -368,6 +433,14 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
     renderer.setRenderTarget(null);
     renderer.render(postScene, postCam);
 
+    if (!preview) adapt(real);
+    if (began) {
+      perf.res = res;
+      perf.js.push(performance.now() - began);
+      perf.gap.push(real * 1000);
+      perf.calls = renderer.info.render.calls;
+      perf.tris = renderer.info.render.triangles;
+    }
     if (playing) {
       hudTimer -= dt;
       if (hudTimer <= 0) {
@@ -391,7 +464,7 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
   }
 
   // Development handle for poking at the scene from the console.
-  if (process.env.NODE_ENV !== 'production') window.__flock = { G, flock, threats, sky, world, tune: TUNE, post };
+  if (process.env.NODE_ENV !== 'production') window.__flock = { G, flock, threats, sky, world, tune: TUNE, post, renderer, perf };
 
   const stop = createFrameLoop(canvas, frame);
   const onVisibility = () => (document.hidden ? audio.suspend() : audio.resume());

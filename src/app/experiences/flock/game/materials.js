@@ -812,8 +812,8 @@ export function postMaterial(U) {
             vec2 vel = (uv - (was.xy / was.w * 0.5 + 0.5)) * uFx.z;
             vel *= min(1.0, 0.045 / max(length(vel), 1e-5));
             float n = 1.0;
-            for (int i = 0; i < 8; i++) {
-              vec4 s = texture2D(tScene, uv + vel * (float(i) / 7.0 - 0.5));
+            for (int i = 0; i < 6; i++) {
+              vec4 s = texture2D(tScene, uv + vel * (float(i) / 5.0 - 0.5));
               float k = step(0.5, s.a);
               col += s.rgb * k;
               n += k;
@@ -827,9 +827,9 @@ export function postMaterial(U) {
           float soft = blurAt(uv);
           if (soft > 0.02) {
             float n = 1.0;
-            for (int i = 0; i < 16; i++) {
+            for (int i = 0; i < 10; i++) {
               float a = float(i) * 2.399963;
-              vec2 p = uv + vec2(cos(a), sin(a)) * sqrt((float(i) + 0.5) / 16.0) * soft * uDof.w * uTexel;
+              vec2 p = uv + vec2(cos(a), sin(a)) * sqrt((float(i) + 0.5) / 10.0) * soft * uDof.w * uTexel;
               vec4 s = texture2D(tScene, p);
               float k = step(0.5, s.a) * (0.05 + blurAt(p));
               col += s.rgb * k;
