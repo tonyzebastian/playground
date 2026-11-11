@@ -12,7 +12,7 @@ import { FLOCK_DIALS, applyTuning } from './game/tuning';
 const stop = (e) => e.stopPropagation();
 
 // The look-and-feel panel (see game/tuning.js). Hidden until
-// Control + Alt/Option + Shift + F; Escape hides it again.
+// Control + Alt/Option + Shift + F; Escape hides it again. The title card lists the shortcut.
 function FlockDials() {
   const [open, setOpen] = useState(false);
   const values = useDialKit('Flock in Flight', FLOCK_DIALS);
@@ -33,6 +33,21 @@ function FlockDials() {
 
 const WARNINGS = 8;
 const ALTITUDES = ['low', 'cruise', 'high'];
+// The title card's list: what it does, then the keys or gestures that do it.
+const CONTROLS = [
+  ['Steer', ['Mouse', 'A', 'D']],
+  ['Dive', ['Hold click', 'W']],
+  ['Climb', ['Hold right-click', 'S']],
+  ['Camera', ['C']],
+  ['Tuning panel', ['Ctrl + Alt + Shift + F']],
+  ['Hide panel', ['Esc']],
+];
+const TOUCH_CONTROLS = [
+  ['Steer', ['Drag']],
+  ['Dive', ['Two fingers up']],
+  ['Climb', ['Two fingers down']],
+  ['Camera', ['Camera button']],
+];
 const CAUSES = {
   plane: 'An aircraft cut through the flock.',
   balloon: 'A balloon was in the way.',
@@ -64,6 +79,8 @@ export default function Flock({ game = false }) {
   const [learned, setLearned] = useState({ steer: false, dive: false });
   const [altitude, setAltitude] = useState(0); // touch: -1 low, 0 cruise, 1 high
   const resetRef = useRef(null);
+  const startRef = useRef(null); // starts a run if a card with a start button is showing (Enter)
+  const [watching, setWatching] = useState(false);
   const [view, setView] = useState(''); // name of the camera just switched to, shown briefly
 
   useEffect(() => {
@@ -187,6 +204,7 @@ export default function Flock({ game = false }) {
       };
       const up = (e) => {
         if (!e || e.type === 'blur') {
+          held.clear();
           if (!fingers.size) {
             dive(false);
             engine.setClimb(false);
@@ -201,15 +219,49 @@ export default function Flock({ game = false }) {
           if (fingers.size < 2) swipe = null;
         }
       };
-      const CLIMB_KEYS = ['ShiftLeft', 'ShiftRight', 'KeyW', 'ArrowUp'];
+      // Keys: A and D (or Left and Right) push the point the cursor sets sideways,
+      // and it stays where it is left. W (or Up, Space) dives while held, S (or
+      // Down, Shift) climbs while held. C changes camera, Enter starts.
+      const STEER = { KeyA: [-1, 0], ArrowLeft: [-1, 0], KeyD: [1, 0], ArrowRight: [1, 0] };
+      const DIVE_KEYS = ['KeyW', 'ArrowUp', 'Space'];
+      const CLIMB_KEYS = ['KeyS', 'ArrowDown', 'ShiftLeft', 'ShiftRight'];
+      const held = new Set();
+      let steering = 0;
+      let then = 0;
+      const steer = (now) => {
+        const dt = Math.min(0.05, (now - then) / 1000);
+        then = now;
+        for (const code of held) {
+          nx = Math.max(-1, Math.min(1, nx + STEER[code][0] * dt * 1.7));
+          ny = Math.max(-1, Math.min(1, ny + STEER[code][1] * dt * 1.7));
+        }
+        engine.setPointer(nx * 1.15, ny * 1.15);
+        steering = held.size ? requestAnimationFrame(steer) : 0;
+      };
+      cleanups.push(() => cancelAnimationFrame(steering));
       const key = (e) => {
-        // Space also presses a focused button or dial; leave those alone.
+        // Space and Enter also press a focused button or dial; leave those alone.
         if (e.target?.closest?.('button, input, select, textarea') || e.ctrlKey || e.altKey || e.metaKey) return;
-        if (e.code === 'Space') {
+        const press = e.type === 'keydown';
+        if (DIVE_KEYS.includes(e.code)) {
           e.preventDefault();
-          dive(e.type === 'keydown');
-        } else if (CLIMB_KEYS.includes(e.code)) engine.setClimb(e.type === 'keydown');
-        else if (e.code === 'KeyC' && e.type === 'keydown' && !e.repeat) setView(engine.nextCamera());
+          dive(press);
+        } else if (CLIMB_KEYS.includes(e.code)) {
+          if (e.code.startsWith('Arrow')) e.preventDefault();
+          engine.setClimb(press);
+        } else if (STEER[e.code]) {
+          e.preventDefault();
+          if (!press) held.delete(e.code);
+          else if (!held.has(e.code)) {
+            held.add(e.code);
+            setLearned((l) => (l.steer ? l : { ...l, steer: true }));
+            if (!steering) {
+              then = performance.now();
+              steering = requestAnimationFrame(steer);
+            }
+          }
+        } else if (e.code === 'KeyC' && press && !e.repeat) showCamera(engine.nextCamera());
+        else if ((e.code === 'Enter' || e.code === 'NumpadEnter') && press && !e.repeat) startRef.current?.();
       };
       const noMenu = (e) => e.preventDefault();
       const on = (el, type, fn) => {
@@ -251,11 +303,17 @@ export default function Flock({ game = false }) {
     setResult(null);
     setLearned({ steer: false, dive: false });
     resetRef.current?.();
+    setWatching(false);
     engineRef.current?.start();
+  };
+  startRef.current = status === 'attract' || status === 'over' ? begin : null;
+  const showCamera = (name) => {
+    setView(name);
+    setWatching(name === 'Cine');
   };
   const nextCamera = () => {
     const name = engineRef.current?.nextCamera();
-    if (name) setView(name);
+    if (name) showCamera(name);
   };
   const toggleMute = () => {
     setMuted((m) => {
@@ -264,11 +322,12 @@ export default function Flock({ game = false }) {
     });
   };
   const playing = status === 'play';
-  let hint = view ? `Camera: ${view}` : '';
-  if (playing && !view) {
+  // The cine camera is for watching: the flock flies itself until the view is changed.
+  let hint = view ? `Camera: ${view}` : watching ? 'Cine camera · the flock flies itself · C to take over' : '';
+  if (playing && !hint) {
     if (hud.storm > 0.2 && hud.low < 0.5) hint = touch ? 'Storm: swipe up with two fingers to fly under it' : 'Storm: hold to fly under it';
-    else if (!learned.steer) hint = touch ? 'Drag to steer the flock' : 'Move the cursor to steer the flock';
-    else if (!learned.dive && hud.distance > 120) hint = touch ? 'Two fingers: swipe up to dive, down to climb' : 'Hold to dive low · Right-click and hold to climb high';
+    else if (!learned.steer) hint = touch ? 'Drag to steer the flock' : 'Move the cursor, or press A and D, to steer the flock';
+    else if (!learned.dive && hud.distance > 120) hint = touch ? 'Two fingers: swipe up to dive, down to climb' : 'Hold click or W to dive · Hold right-click or S to climb';
   }
 
   return (
@@ -347,17 +406,25 @@ export default function Flock({ game = false }) {
           )}
 
           {(status === 'attract' || status === 'over') && (
-            <div className="absolute inset-0 z-40 flex items-end justify-center bg-gradient-to-t from-black/45 via-black/5 to-transparent p-6 pb-28 sm:items-center sm:justify-start sm:bg-none sm:pb-6 sm:pl-[7vw]">
+            <div className="absolute inset-0 z-40 flex items-end justify-center bg-gradient-to-t from-black/45 via-black/5 to-transparent p-6 pb-28 sm:items-center sm:justify-end sm:bg-none sm:pb-6 sm:pr-[7vw]">
               <div className="w-full max-w-sm rounded-3xl bg-black/35 p-7 text-center text-white shadow-2xl backdrop-blur-md" onPointerDown={stop}>
                 {status === 'attract' ? (
                   <>
                     <h1 className="font-heading text-3xl font-bold">Flock in Flight</h1>
-                    <p className="mt-3 text-sm leading-relaxed text-white/85">
-                      Lead the flock across the country. Steer around aircraft, balloons and hawks, dive under storms, and mind what waits near the ground. Gather strays to grow the flock.
-                    </p>
-                    <p className="mt-4 text-[11px] font-semibold uppercase tracking-widest text-white/70">
-                      {touch ? 'Drag to steer · Two fingers up to dive, down to climb' : 'Move to steer · Hold to dive · Right-hold to climb'}
-                    </p>
+                    <dl className="mt-5 space-y-2 text-left text-sm">
+                      {(touch ? TOUCH_CONTROLS : CONTROLS).map(([does, how]) => (
+                        <div key={does} className="flex items-baseline justify-between gap-4">
+                          <dt className="text-white/70">{does}</dt>
+                          <dd className="flex flex-wrap justify-end gap-1">
+                            {how.map((k) => (
+                              <kbd key={k} className="rounded-md bg-white/15 px-1.5 py-0.5 font-sans text-[11px] font-semibold">
+                                {k}
+                              </kbd>
+                            ))}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
                   </>
                 ) : (
                   <>
@@ -378,9 +445,11 @@ export default function Flock({ game = false }) {
                 <button
                   type="button"
                   onClick={begin}
-                  className="mt-6 w-full rounded-full bg-white px-6 py-3 text-sm font-semibold text-slate-900 transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                  className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-slate-900 transition-transform hover:scale-[1.02] active:scale-[0.98]"
                 >
                   {status === 'attract' ? 'Take flight' : 'Fly again'}
+                  {/* The key that presses this button. */}
+                  {!touch && <kbd className="rounded-md bg-slate-900/10 px-1.5 py-0.5 font-sans text-[11px] font-semibold text-slate-600">Enter</kbd>}
                 </button>
               </div>
             </div>

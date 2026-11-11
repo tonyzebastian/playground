@@ -28,6 +28,19 @@ export const FLOCK_DIALS = {
   },
   grade: {
     _collapsed: true,
+    look: {
+      type: 'select',
+      options: [
+        { value: 'film', label: 'Film' },
+        { value: 'natural', label: 'Natural' },
+        { value: 'golden', label: 'Golden hour' },
+        { value: 'dawn', label: 'Cold dawn' },
+        { value: 'storm', label: 'Storm' },
+      ],
+      default: 'film',
+    },
+    lookAmount: [1, 0, 2, 0.01],
+    depthOfField: [1, 0, 3, 0.01],
     exposure: [1, 0.5, 1.6, 0.01],
     saturation: [1.1, 0, 2, 0.01],
     contrast: [0.3, 0, 1, 0.01],
@@ -51,6 +64,9 @@ export const FLOCK_DIALS = {
     swing: [3.4, 0.5, 10, 0.1],
     roll: [1, 0, 3, 0.05],
     speedFov: [8, 0, 25, 0.5],
+    slowMotion: [0.35, 0.1, 1, 0.01],
+    punchIn: [6, 0, 20, 0.5],
+    cineShotLength: [1, 0.4, 3, 0.05],
   },
   flight: {
     _collapsed: true,
@@ -66,7 +82,7 @@ export const FLOCK_DIALS = {
   },
   shadows: {
     _collapsed: true,
-    strength: [0.58, 0, 1, 0.01],
+    strength: [0.66, 0, 1, 0.01],
     softness: [1, 0, 4, 0.05],
     throwLeft: [0.13, -0.6, 0.6, 0.01],
     throwAhead: [0.38, 0, 1, 0.01],
@@ -87,6 +103,17 @@ export const FLOCK_DIALS = {
     ambience: [1, 0, 2, 0.01],
     effects: [1, 0, 2, 0.01],
   },
+};
+
+// The film looks: a tint for the shadows and one for the highlights (0.5 grey
+// leaves them alone), how strongly to apply them, and what they add to the
+// saturation, contrast and warmth set above.
+export const LOOKS = {
+  natural: { lo: [0.5, 0.5, 0.5], hi: [0.5, 0.5, 0.5], split: 0, sat: 1, contrast: 0, warmth: 0 },
+  film: { lo: [0.46, 0.5, 0.56], hi: [0.56, 0.51, 0.45], split: 0.5, sat: 1, contrast: 0.08, warmth: 0 },
+  golden: { lo: [0.48, 0.47, 0.57], hi: [0.6, 0.52, 0.4], split: 0.7, sat: 1.08, contrast: 0.1, warmth: 0.04 },
+  dawn: { lo: [0.44, 0.5, 0.6], hi: [0.52, 0.52, 0.5], split: 0.6, sat: 0.85, contrast: 0.05, warmth: -0.04 },
+  storm: { lo: [0.42, 0.52, 0.55], hi: [0.5, 0.52, 0.52], split: 0.6, sat: 0.7, contrast: 0.15, warmth: -0.03 },
 };
 
 const initial = (control) => (Array.isArray(control) ? control[0] : control && typeof control === 'object' ? control.default : control);

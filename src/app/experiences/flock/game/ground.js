@@ -9,7 +9,9 @@ import { clamp, fbm, hash2, hex, lerp, mix3, noise2, ramp, smoothstep } from './
 
 export const BIOME = { MEADOW: 0, FARM: 1, FOREST: 2, WATER: 3, TOWN: 4, HIGHLAND: 5, HILLS: 6, AIRPORT: 7, BASIN: 8 };
 const ZONE = 960; // length of one zone along the route
-const OPENING = [BIOME.MEADOW, BIOME.FARM, BIOME.HILLS, BIOME.BASIN, BIOME.TOWN, BIOME.AIRPORT, BIOME.WATER, BIOME.FOREST, BIOME.HIGHLAND];
+// The run opens in the last of a meadow, with the first waterfall just ahead (see START_Z).
+const OPENING = [BIOME.MEADOW, BIOME.BASIN, BIOME.FARM, BIOME.HILLS, BIOME.TOWN, BIOME.AIRPORT, BIOME.WATER, BIOME.FOREST, BIOME.HIGHLAND];
+export const START_Z = -800;
 const zones = new Map();
 
 function zoneBiome(i) {

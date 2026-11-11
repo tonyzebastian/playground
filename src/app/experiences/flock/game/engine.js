@@ -7,14 +7,15 @@ import * as THREE from 'three';
 import { createFrameLoop } from '@/lib/frame-loop';
 import { loadKit, loadTrees } from './assets';
 import { createAudio } from './audio';
+import { createCine } from './cine';
 import { CRUISE, createFlock } from './flock';
 import { createFx } from './fx';
-import { heightAt } from './ground';
+import { START_Z, heightAt } from './ground';
 import { blurMaterial, brightMaterial, createUniforms, postMaterial, raysMaterial } from './materials';
 import { clamp, damp, lerp, smoothstep } from './noise';
 import { createSky } from './sky';
 import { createThreats } from './threats';
-import { TUNE } from './tuning';
+import { LOOKS, TUNE } from './tuning';
 import { createWorld } from './world';
 
 const START_BIRDS = 7;
@@ -29,6 +30,8 @@ export const CAMERAS = [
   { name: 'Chase', behind: 1, back: 1.55, height: 2, fov: 0 }, // far enough back to keep the whole flock in frame
   { name: 'Far chase', behind: 1, back: 2.6, height: 4.2, fov: -8 },
   { name: 'Overhead', behind: 0, back: 1, height: 1, fov: 0 },
+  // A watch mode: composed shots that cut by themselves while the flock flies itself (cine.js).
+  { name: 'Cine', behind: 1, back: 1, height: 1, fov: 0, cine: true },
 ];
 
 export async function createGame(canvas, { preview = false, onEvent = () => {}, onWarnings = null } = {}) {
@@ -120,7 +123,8 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
   const world = createWorld(scene, U, kit, { lite, fx });
   const sky = createSky(scene, U, { lite });
   const flock = createFlock(scene, U, kit, fx);
-  const G = { scene, U, kit, fx, world, sky, flock, audio, camera, lite, level: 0, dist: 0, shake: 0, hit };
+  const G = { scene, U, kit, fx, world, sky, flock, audio, camera, lite, level: 0, dist: 0, shake: 0, hit, moment };
+  const cine = createCine();
   const threats = createThreats(G);
 
   let state = 'attract'; // attract | play | over
@@ -133,11 +137,18 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
   let lastCause = '';
   let hudTimer = 0;
   let camK = 0;
-  let camMode = preview ? 0 : 1; // the game opens in the chase view; the gallery card keeps the overhead one
+  let camMode = preview ? 0 : 1; // a run opens in the chase view; the gallery card keeps the overhead one
+  const CINE = CAMERAS.findIndex((v) => v.cine);
+  // Behind the title and the game-over card the cine camera films the flock; the player's own choice applies in play.
+  const viewNow = () => CAMERAS[state === 'play' || preview ? camMode : CINE];
   let camBack = 1;
   let camUp = 1;
   let camRoll = 0;
   let lastX = 0;
+  let stopT = 0; // the world holds still for a moment when a bird is lost
+  let slowT = 0; // and slows as something only just misses
+  let punch = 0;
+  let bars = 0;
   let aspect = 1;
   let xr = 42;
   let zoom = 1;
@@ -149,14 +160,15 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
   const warnList = [];
   const warnOut = [];
 
-  flock.reset(START_BIRDS, 0);
-  world.update(0, 0, true);
+  flock.reset(START_BIRDS, START_Z);
+  world.update(START_Z, 0, true);
 
   function hit(bird, cause, item, force = false) {
-    if (state !== 'play' || (invuln > 0 && !force) || G.god || TUNE.threats.invincible) return;
+    if (state !== 'play' || (invuln > 0 && !force) || G.god || TUNE.threats.invincible || viewNow().cine) return;
     if (item) item.hits++;
     const left = flock.lose(bird, (Math.random() - 0.5) * 14, 5, 12);
     invuln = 0.75;
+    stopT = 0.09;
     hurt = 1;
     G.shake = 1;
     lastCause = cause;
@@ -169,9 +181,18 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
     }
   }
 
+  // Something worth the camera's attention. 'near': a threat only just missed.
+  function moment(kind) {
+    if (kind !== 'near' || reduced || slowT > 0) return;
+    slowT = 0.6;
+    punch = 1;
+  }
+
   function start() {
     audio.start();
     state = 'play';
+    camMode = 1; // every run begins in the chase view
+    cine.reset();
     startZ = flock.ctrl.z;
     G.level = 0;
     G.dist = 0;
@@ -212,7 +233,12 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
     fx.setViewport(h * dpr, 50);
   }
 
-  function frame(dt) {
+  function frame(real) {
+    // Time itself is part of the camera work: a held breath on a loss, slow motion on a near miss.
+    stopT -= real;
+    slowT -= real;
+    punch *= Math.exp(-real * 3);
+    const dt = real * (reduced ? 1 : stopT > 0 ? 0.04 : slowT > 0 ? lerp(1, TUNE.camera.slowMotion, smoothstep(0, 0.25, slowT)) : 1);
     time += dt;
     U.uTime.value = time;
     const c = flock.ctrl;
@@ -220,9 +246,10 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
 
     auto.nx = Math.sin(time * 0.23) * 0.4 + Math.sin(time * 0.11) * 0.2;
     auto.ny = Math.sin(time * 0.17) * 0.3;
-    c.speed = playing ? lerp(TUNE.flight.speed, TUNE.flight.diveSpeed, c.low) + Math.min(14, G.level * 1.2) : 28;
+    c.speed = playing ? lerp(TUNE.flight.speed, TUNE.flight.diveSpeed, c.low) + Math.min(14, G.level * 1.2) : 18; // unhurried behind the title, so the waterfall stays in the picture
     if (reduced && !playing) c.speed = 8;
-    flock.update(dt, playing ? input : auto, xr, playing ? Math.sin(time * 0.7) * 9 * sky.storm : 0);
+    const watching = !!viewNow().cine;
+    flock.update(dt, playing && !watching ? input : auto, xr, playing ? Math.sin(time * 0.7) * 9 * sky.storm : 0);
     world.update(c.z);
 
     if (playing) {
@@ -230,7 +257,7 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
       G.level = Math.floor(G.dist / 1100);
       invuln -= dt;
     }
-    threats.update(dt, xr, playing);
+    threats.update(dt, xr, playing && !watching); // nothing new is sent at a flock that is only being filmed
     const joined = flock.takeJoined();
     if (joined) {
       recruited += joined;
@@ -244,10 +271,12 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
 
     // Camera: above the flock while cruising, behind it when low.
     const cam = TUNE.camera;
-    const view = CAMERAS[camMode];
+    const view = viewNow();
     camK += ((view.behind ?? c.low) - camK) * damp(cam.swing, dt);
-    camBack += (view.back - camBack) * damp(2.4, dt);
-    camUp += (view.height - camUp) * damp(2.4, dt);
+    // Where the land falls away into a basin the camera pulls back and up to take it in.
+    const fall = clamp(-c.floor / 80) * (1 - c.low * 0.7);
+    camBack += (view.back * (1 + 0.8 * fall) - camBack) * damp(2.4, dt);
+    camUp += (view.height * (1 + 1.5 * fall) - camUp) * damp(2.4, dt);
     // Lean with the turn, and widen a little as the flock gathers speed.
     const vx = (c.x - lastX) / Math.max(dt, 1e-3);
     lastX = c.x;
@@ -262,13 +291,25 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
     camPos.set(cx, lerp(top + cam.height * zoom, by + cam.chaseHeight * camUp, e), lerp(c.z + cam.back * zoom, flock.leader.z + cam.chaseBack * camBack, e));
     camLook.set(c.x * lerp(0.35, 0.9, e), lerp(top, by + 0.5, e), lerp(c.z - cam.lookAhead, flock.leader.z - 60, e));
     camPos.y = Math.max(camPos.y, heightAt(camPos.x, camPos.z) + 3);
+    let fov = lerp(cam.fov, cam.chaseFov + view.fov + rush * cam.speedFov, e) - punch * cam.punchIn;
+    let focus = camPos.distanceTo(flock.leader);
+    let jump = false;
+    if (watching) {
+      const film = cine.update(dt, flock.birds, flock.leader, c.speed, cam.cineShotLength);
+      camPos.copy(film.pos);
+      camLook.copy(film.look);
+      fov = film.fov;
+      focus = film.focus;
+      jump = film.cut;
+    }
+    bars += ((watching ? 0.11 : 0) - bars) * damp(4, real);
     G.shake *= Math.exp(-dt * 6);
     if (G.shake > 0.01 && !reduced) camPos.add(v.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(G.shake * 1.6));
     camera.position.copy(camPos);
-    camera.fov = lerp(cam.fov, cam.chaseFov + view.fov + rush * cam.speedFov, e);
+    camera.fov = fov;
     camera.updateProjectionMatrix();
     camera.lookAt(camLook);
-    if (!reduced) camera.rotateZ(camRoll * e);
+    if (!reduced && !watching) camera.rotateZ(camRoll * e);
 
     sky.update(dt, c.z, camPos, c.speed);
     flock.draw();
@@ -276,8 +317,14 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
     audio.update({ speed: c.speed / 60, low: c.low, high: c.high, rainK: sky.rain, storm: sky.storm, playing });
 
     U.uLight.value.set(TUNE.light.sun, TUNE.light.ambient, TUNE.light.sunShadows, TUNE.light.rim);
-    post.uniforms.uGrade.value.set(TUNE.grade.exposure, TUNE.grade.saturation, TUNE.grade.contrast, TUNE.grade.highlights);
-    post.uniforms.uGrade2.value.set(TUNE.grade.warmth, TUNE.grade.vignette);
+    const film = LOOKS[TUNE.grade.look] || LOOKS.natural;
+    const much = TUNE.grade.lookAmount;
+    post.uniforms.uGrade.value.set(TUNE.grade.exposure, TUNE.grade.saturation * lerp(1, film.sat, much), TUNE.grade.contrast + film.contrast * much, TUNE.grade.highlights);
+    post.uniforms.uGrade2.value.set(TUNE.grade.warmth + film.warmth * much, TUNE.grade.vignette);
+    post.uniforms.uSplitLo.value.fromArray(film.lo);
+    post.uniforms.uSplitHi.value.fromArray(film.hi);
+    post.uniforms.uSplit.value = film.split * much;
+    post.uniforms.uBars.value = bars;
     hurt *= Math.exp(-dt * 2.2);
     post.uniforms.uHurt.value = hurt;
     post.uniforms.uSpeed.value = reduced ? 0 : e;
@@ -307,7 +354,12 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
         pass(rays, raysT);
       }
       // Motion blur follows the camera's own movement, the same at any frame rate.
-      post.uniforms.uFx.value.set(g.bloom, sunSeen * g.godRays, reduced ? 0 : g.motionBlur * lerp(0.35, 1, e) * Math.min(2, 1 / 60 / Math.max(dt, 1e-3)));
+      post.uniforms.uFx.value.set(g.bloom, sunSeen * g.godRays, reduced || jump ? 0 : g.motionBlur * lerp(0.35, 1, e) * Math.min(2, 1 / 60 / Math.max(real, 1e-3)));
+      // Depth of field: off in the overhead view (everything there is the same distance away),
+      // gentle in the chase views, shallow through the cine camera's long lenses.
+      const px = renderer.getPixelRatio() * 6 * g.depthOfField * (watching ? 1.5 : e);
+      post.uniforms.uDof.value.set(focus, focus * (watching ? 1.6 : 5), focus * (watching ? 8 : 45), px);
+      post.uniforms.uNearFar.value.set(camera.near, camera.far);
       post.uniforms.uPrevViewProj.value.copy(viewProj);
       viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
       post.uniforms.uInvViewProj.value.copy(viewProj).invert();
@@ -339,7 +391,7 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
   }
 
   // Development handle for poking at the scene from the console.
-  if (process.env.NODE_ENV !== 'production') window.__flock = { G, flock, threats, sky, world };
+  if (process.env.NODE_ENV !== 'production') window.__flock = { G, flock, threats, sky, world, tune: TUNE, post };
 
   const stop = createFrameLoop(canvas, frame);
   const onVisibility = () => (document.hidden ? audio.suspend() : audio.resume());
@@ -362,6 +414,7 @@ export async function createGame(canvas, { preview = false, onEvent = () => {}, 
     // Switch to the next view; returns its name.
     nextCamera() {
       camMode = (camMode + 1) % CAMERAS.length;
+      cine.reset();
       return CAMERAS[camMode].name;
     },
     setMuted: (m) => audio.setMuted(m),

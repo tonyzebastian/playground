@@ -26,7 +26,7 @@ function bakeSilhouettes(kit) {
     const I = geo.index;
     let reach = 0;
     for (let i = 0; i < P.count; i++) reach = Math.max(reach, Math.abs(P.getX(i)), Math.abs(P.getZ(i)));
-    const size = reach * 2 * 1.16; // a margin, so the soft edge stays inside the tile
+    const size = reach * 2 * 1.5; // a wide margin, so even a very soft edge stays inside the tile
     const col = n % COLS;
     const row = Math.floor(n / COLS);
     const px = (i) => (col + 0.5 + P.getX(i) / size) * TILE;
@@ -138,8 +138,9 @@ export function createFx(scene, U, kit) {
       0, 0, 0, 1,
     );
     shadows.setMatrixAt(sn, m4);
-    // The higher the flyer, the softer the edge, as under a real sun.
-    shadeAttr.array.set([tile.u, tile.v, Math.min(0.07, ((0.12 + alt * 0.006) * TUNE.shadows.softness) / l), 1 - Math.min(0.3, alt * 0.004)], sn * 4);
+    // The higher the flyer, the softer its shadow: a vague shape from cruising
+    // height, every feather when it skims the ground.
+    shadeAttr.array.set([tile.u, tile.v, Math.min(0.16, ((0.1 + alt * 0.016) * TUNE.shadows.softness) / l), 1 - Math.min(0.3, alt * 0.004)], sn * 4);
     sn++;
   }
 

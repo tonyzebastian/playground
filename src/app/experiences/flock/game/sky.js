@@ -7,14 +7,17 @@ import { TUNE } from './tuning';
 
 // One entry per moment of the day; the game loops through them.
 const DAY = [
-  { sun: [1.25, 1.0, 0.72], shade: [0.56, 0.58, 0.76], top: [0.42, 0.66, 0.9], fog: [0.98, 0.86, 0.68], glow: [1.0, 0.82, 0.5], lit: [1.0, 0.95, 0.85], dim: [0.78, 0.7, 0.78], water: [0.14, 0.42, 0.55], elev: 30 },
-  { sun: [1.12, 1.08, 0.98], shade: [0.6, 0.65, 0.8], top: [0.3, 0.6, 0.93], fog: [0.84, 0.9, 0.93], glow: [1.0, 0.97, 0.85], lit: [1.0, 1.0, 1.0], dim: [0.72, 0.78, 0.9], water: [0.1, 0.4, 0.62], elev: 60 },
-  { sun: [1.3, 0.82, 0.5], shade: [0.5, 0.42, 0.7], top: [0.38, 0.42, 0.75], fog: [1.0, 0.68, 0.5], glow: [1.0, 0.6, 0.3], lit: [1.0, 0.75, 0.6], dim: [0.6, 0.45, 0.65], water: [0.2, 0.3, 0.5], elev: 16 },
-  { sun: [0.62, 0.7, 1.0], shade: [0.22, 0.27, 0.5], top: [0.08, 0.12, 0.32], fog: [0.3, 0.36, 0.58], glow: [0.5, 0.5, 0.75], lit: [0.5, 0.56, 0.8], dim: [0.2, 0.24, 0.42], water: [0.06, 0.14, 0.3], elev: 42 },
-  { sun: [1.2, 0.85, 0.7], shade: [0.42, 0.42, 0.7], top: [0.4, 0.5, 0.8], fog: [0.98, 0.74, 0.68], glow: [1.0, 0.7, 0.55], lit: [1.0, 0.8, 0.75], dim: [0.6, 0.5, 0.7], water: [0.2, 0.32, 0.5], elev: 13 },
+  { sun: [1.25, 1.0, 0.72], shade: [0.56, 0.58, 0.76], top: [0.42, 0.66, 0.9], fog: [0.98, 0.86, 0.68], glow: [1.0, 0.82, 0.5], lit: [1.0, 0.95, 0.85], dim: [0.78, 0.7, 0.78], water: [0.14, 0.42, 0.55], elev: 24, span: 1.5 },
+  { sun: [1.12, 1.08, 0.98], shade: [0.6, 0.65, 0.8], top: [0.3, 0.6, 0.93], fog: [0.84, 0.9, 0.93], glow: [1.0, 0.97, 0.85], lit: [1.0, 1.0, 1.0], dim: [0.72, 0.78, 0.9], water: [0.1, 0.4, 0.62], elev: 46, span: 0.6 },
+  { sun: [1.3, 0.82, 0.5], shade: [0.5, 0.42, 0.7], top: [0.38, 0.42, 0.75], fog: [1.0, 0.68, 0.5], glow: [1.0, 0.6, 0.3], lit: [1.0, 0.75, 0.6], dim: [0.6, 0.45, 0.65], water: [0.2, 0.3, 0.5], elev: 12, span: 2.4 },
+  { sun: [0.62, 0.7, 1.0], shade: [0.22, 0.27, 0.5], top: [0.08, 0.12, 0.32], fog: [0.3, 0.36, 0.58], glow: [0.5, 0.5, 0.75], lit: [0.5, 0.56, 0.8], dim: [0.2, 0.24, 0.42], water: [0.06, 0.14, 0.3], elev: 38, span: 0.5 },
+  { sun: [1.2, 0.85, 0.7], shade: [0.42, 0.42, 0.7], top: [0.4, 0.5, 0.8], fog: [0.98, 0.74, 0.68], glow: [1.0, 0.7, 0.55], lit: [1.0, 0.8, 0.75], dim: [0.6, 0.5, 0.7], water: [0.2, 0.32, 0.5], elev: 11, span: 1.5 },
 ];
 const STORM = { sun: [0.6, 0.64, 0.7], shade: [0.36, 0.4, 0.48], top: [0.28, 0.32, 0.38], fog: [0.5, 0.54, 0.58], glow: [0.56, 0.6, 0.64], lit: [0.62, 0.65, 0.7], dim: [0.3, 0.33, 0.4], water: [0.14, 0.24, 0.3] };
 const PHASE = 52; // seconds per moment of the day
+const DAY_SPAN = DAY.reduce((sum, d) => sum + d.span, 0);
+// The day opens on the golden light of evening (the third moment).
+const EVENING = (DAY[0].span + DAY[1].span) * PHASE;
 const KEYS = ['sun', 'shade', 'top', 'fog', 'glow', 'lit', 'dim', 'water'];
 
 export function createSky(scene, U, { lite }) {
@@ -185,7 +188,7 @@ export function createSky(scene, U, { lite }) {
   }
 
   // ----------------------------------------------------------------------- update
-  let clock = 0;
+  let clock = EVENING;
   let storm = 0;
   let rainK = 0;
   let drizzle = 0;
@@ -197,10 +200,18 @@ export function createSky(scene, U, { lite }) {
     storm += (target - storm) * damp(0.9, dt);
     rainK += (Math.max(target, drizzle) - rainK) * damp(0.7, dt);
 
-    const f = TUNE.day.time === 'cycle' ? (clock / PHASE) % DAY.length : Number(TUNE.day.time);
+    // Each moment lasts `span` phases: the low sun of morning, evening and dawn
+    // is held much longer than noon or night.
+    let f = Number(TUNE.day.time);
+    if (TUNE.day.time === 'cycle') {
+      let left = (clock / PHASE) % DAY_SPAN;
+      f = 0;
+      while (left >= DAY[f].span) left -= DAY[f++].span;
+      f += left / DAY[f].span;
+    }
     const a = DAY[Math.floor(f)];
     const b = DAY[(Math.floor(f) + 1) % DAY.length];
-    const k = smoothstep(0.35, 1, f - Math.floor(f));
+    const k = smoothstep(0.6, 1, f - Math.floor(f)); // each moment is held, then turns into the next
     for (const key of KEYS) {
       for (let i = 0; i < 3; i++) col[i] = lerp(lerp(a[key][i], b[key][i], k), STORM[key][i] * (0.55 + 0.45 * lerp(a.sun[1], b.sun[1], k)), storm * 0.85);
       targets[key].value.setRGB(col[0], col[1], col[2]);

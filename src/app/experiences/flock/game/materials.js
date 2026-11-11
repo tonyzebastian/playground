@@ -337,7 +337,15 @@ void main() {
   vec3 col = base * (ambient * uLight.y + max(uSunCol * 1.08 - uShadeCol * 0.8, 0.0) * direct * uLight.x);
 #ifndef USE_MAP
   vec3 view = normalize(cameraPosition - vWorld);
-  col += uSkyTop * pow(1.0 - max(dot(n, view), 0.0), 3.0) * uLight.w;
+  float edge = 1.0 - max(dot(n, view), 0.0);
+  col += uSkyTop * pow(edge, 3.0) * uLight.w;
+  // A low sun catches the edges that face it: a warm rim, strongest on the birds.
+  float lowSun = 1.0 - smoothstep(0.25, 0.75, uSun.y);
+#ifdef SHARP
+  col += uSunCol * pow(edge, 2.2) * smoothstep(-0.2, 0.6, dot(n, uSun)) * lowSun * uLight.w * 5.0 * sun;
+#else
+  col += uSunCol * pow(edge, 2.5) * smoothstep(-0.2, 0.6, dot(n, uSun)) * lowSun * uLight.w * 1.5 * sun;
+#endif
 #endif
 #ifdef SHARP
   gl_FragColor = vec4(applyFog(col), 0.0);
@@ -563,12 +571,12 @@ export function silhouetteMaterial(U, map, cols, rows) {
       varying vec4 vShade;
       void main() {
         float a = 0.0;
-        for (int i = 0; i < 12; i++) {
+        for (int i = 0; i < 24; i++) {
           float ang = float(i) * 2.399963;
-          vec2 o = vec2(cos(ang), sin(ang)) * sqrt((float(i) + 0.5) / 12.0) * vShade.z;
+          vec2 o = vec2(cos(ang), sin(ang)) * sqrt((float(i) + 0.5) / 24.0) * vShade.z;
           a += texture2D(uMap, vShade.xy + clamp(vUv + o, 0.0, 1.0) * uTile).r;
         }
-        a *= vShade.w * (1.0 - uWet * 0.5) / 12.0;
+        a *= vShade.w * (1.0 - uWet * 0.5) / 24.0;
         gl_FragColor = vec4(vec3(0.05, 0.1, 0.16), a * uStrength);
       }`,
   });
@@ -755,6 +763,14 @@ export function postMaterial(U) {
       uSunCol: U.uSunCol,
       uInvViewProj: { value: new THREE.Matrix4() },
       uPrevViewProj: { value: new THREE.Matrix4() },
+      // Depth of field: focus distance, where the far blur starts and is full, and its size in pixels.
+      uDof: { value: new THREE.Vector4(30, 150, 1400, 0) },
+      uNearFar: { value: new THREE.Vector2(1, 2600) },
+      // The film look: shadow tint, highlight tint, strength. Then the letterbox bars (share of the height, each).
+      uSplitLo: { value: new THREE.Vector3(0.5, 0.5, 0.5) },
+      uSplitHi: { value: new THREE.Vector3(0.5, 0.5, 0.5) },
+      uSplit: { value: 0 },
+      uBars: { value: 0 },
     },
     depthTest: false,
     depthWrite: false,
@@ -765,12 +781,22 @@ export function postMaterial(U) {
       uniform sampler2D tScene, uBrush, tDepth, tBloom, tRays;
       uniform vec3 uFx, uSunCol;
       uniform mat4 uInvViewProj, uPrevViewProj;
+      uniform vec4 uDof;
+      uniform vec2 uNearFar;
+      uniform vec3 uSplitLo, uSplitHi;
+      uniform float uSplit, uBars;
       uniform vec2 uTexel;
       uniform float uAspect, uHurt, uTime, uSpeed;
       uniform vec4 uGrade;
       uniform vec2 uGrade2;
       varying vec2 vUv;
       float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+      // How far out of focus a point is, 0..1: soft far away, softer still right in front of the lens.
+      float blurAt(vec2 p) {
+        float z = texture2D(tDepth, p).r * 2.0 - 1.0;
+        float d = 2.0 * uNearFar.x * uNearFar.y / (uNearFar.y + uNearFar.x - z * (uNearFar.y - uNearFar.x));
+        return max(smoothstep(uDof.y, uDof.z, d) * 0.75, 1.0 - smoothstep(uDof.x * 0.2, uDof.x * 0.6, d));
+      }
       void main() {
         vec2 dir = (vUv - 0.5);
         vec2 uv = vUv - dir * dot(dir, dir) * uSpeed * 0.05;
@@ -795,6 +821,23 @@ export function postMaterial(U) {
             col /= n;
           }
         }
+        // Depth of field: the flock is in focus; the distance and anything close to the
+        // lens go soft. Birds and aircraft (low alpha) are never softened or smeared.
+        if (uDof.w > 0.0 && here.a > 0.5) {
+          float soft = blurAt(uv);
+          if (soft > 0.02) {
+            float n = 1.0;
+            for (int i = 0; i < 16; i++) {
+              float a = float(i) * 2.399963;
+              vec2 p = uv + vec2(cos(a), sin(a)) * sqrt((float(i) + 0.5) / 16.0) * soft * uDof.w * uTexel;
+              vec4 s = texture2D(tScene, p);
+              float k = step(0.5, s.a) * (0.05 + blurAt(p));
+              col += s.rgb * k;
+              n += k;
+            }
+            col /= n;
+          }
+        }
         col += texture2D(tBloom, uv).rgb * uFx.x + uSunCol * texture2D(tRays, uv).r * uFx.y;
         col *= uGrade.x;
         col *= vec3(1.0 + uGrade2.x, 1.0, 1.0 - uGrade2.x);
@@ -803,9 +846,14 @@ export function postMaterial(U) {
         // Roll the highlights off instead of clipping them.
         col = mix(col, 1.0 - exp(-col * uGrade.w), smoothstep(0.55, 1.2, y));
         col = mix(col, col * col * (3.0 - 2.0 * col), uGrade.z);
+        // Split toning: one tint for the shadows, another for the highlights.
+        float tone = luma(col);
+        col = mix(col, col * uSplitLo * 2.0, uSplit * (1.0 - smoothstep(0.0, 0.55, tone)));
+        col = mix(col, col * uSplitHi * 2.0, uSplit * smoothstep(0.45, 1.0, tone));
         float v = dot(dir, dir);
         col *= 1.0 - v * uGrade2.y;
         col = mix(col, vec3(0.75, 0.12, 0.08), uHurt * smoothstep(0.08, 0.5, v) * 0.7);
+        col *= 1.0 - step(0.5 - uBars, abs(vUv.y - 0.5)); // letterbox
         gl_FragColor = vec4(col, 1.0);
       }`,
   });

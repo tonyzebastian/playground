@@ -75,7 +75,7 @@ export function createThreats(G) {
     let t = 0;
     let heard = false;
     const it = {
-      kind: 'plane', warn: 'plane', x, y, z, hits: 0, max: big ? 2 : 1, reach: 60, behind: vz < 0, dead: false,
+      big, kind: 'plane', warn: 'plane', x, y, z, hits: 0, max: big ? 2 : 1, reach: 60, behind: vz < 0, dead: false,
       update(dt) {
         if (it.dead) return false;
         t += dt;
@@ -137,7 +137,7 @@ export function createThreats(G) {
     let heard = false;
     let puff = 0;
     const it = {
-      kind: 'plane', warn: null, x, y, z, hits: 0, max: big ? 2 : 1, reach: 60, behind: dir < 0 && z > flock.ctrl.z, dead: false,
+      big, kind: 'plane', warn: null, x, y, z, hits: 0, max: big ? 2 : 1, reach: 60, behind: dir < 0 && z > flock.ctrl.z, dead: false,
       update(dt) {
         const c = flock.ctrl;
         let aim = 0;
@@ -199,13 +199,18 @@ export function createThreats(G) {
     const mesh = mk('balloon', scene, false);
     const ph = Math.random() * 6.28;
     mesh.rotation.y = ph;
+    // Each balloon rides the wind its own way: a slow drift across the route, a little along it, and a lazy sway.
+    const drift = rand(-3.5, 3.5);
+    const along = rand(-2, 3);
     let t = 0;
     const it = {
       kind: 'balloon', warn: 'balloon', x, y, z, hits: 0, max: 1, reach: 30,
       update(dt) {
         t += dt;
-        it.y = y + Math.sin(t * 0.5 + ph) * 2.2;
-        it.x = x + Math.sin(t * 0.21 + ph) * 3;
+        it.y = y + Math.sin(t * 0.5 + ph) * 2.6;
+        it.x = x + drift * t + Math.sin(t * 0.27 + ph) * 7;
+        it.z = z + along * t;
+        mesh.rotation.y = ph + t * 0.12;
         mesh.position.set(it.x, it.y - 13.5, it.z);
         fx.shadow('balloon', it.x, it.y, it.z, ph);
         return it.z < flock.ctrl.z + 130;
@@ -482,6 +487,8 @@ export function createThreats(G) {
 
   // ----------------------------------------------------------------- director
   const D = { air: 0, ground: 0, stray: 0, traffic: 0, moves: 0 };
+  // How close each kind may pass and still count as a near miss.
+  const NEAR = { plane: 13, airliner: 24, balloon: 16, hawk: 8 };
   const AIRCRAFT = ['biplane', 'crosser', 'airliner', 'behind'];
   const add = (it) => it && items.push(it);
   const dry = (x, z) => relAt(x, z) > 1.2;
@@ -503,8 +510,10 @@ export function createThreats(G) {
     const jetLevel = () => (c.high > 0.5 ? c.y : CRUISE);
     switch (what) {
       case 'balloons': {
-        const n = 3 + Math.min(3, Math.floor(lv / 2));
-        for (let i = 0; i < n; i++) add(balloon(lerp(-xr, xr, (i + rand(0.15, 0.85)) / n), CRUISE + rand(-5, 8), z - rand(0, 110)));
+        // Strung out along the route and across more than its width, never in a tight knot.
+        const n = 3 + Math.min(2, Math.floor(lv / 3));
+        for (let i = 0; i < n; i++) add(balloon(lerp(-xr * 1.25, xr * 1.25, (i + rand(0.2, 0.8)) / n), CRUISE + rand(-6, 9), z - i * rand(70, 110) - rand(0, 40)));
+        gap += n * 60;
         break;
       }
       // Aircraft always come one at a time.
@@ -624,6 +633,21 @@ export function createThreats(G) {
         hawkMesh.setMatrixAt(hn, m4);
         hawkFlap.array.set([it.phase, it.amp, 1 - it.amp, 0], hn * 4);
         hn++;
+      }
+      // A near miss: something that went past within a wing's reach without touching a bird.
+      const close = NEAR[it.big ? 'airliner' : it.kind];
+      if (playing && close && !it.passed) {
+        const ahead = c.z - it.z;
+        if (it.side === undefined) it.side = Math.sign(ahead) || 1;
+        if (Math.abs(ahead) < 30) {
+          for (const b of flock.birds) it.closest = Math.min(it.closest ?? 1e9, Math.hypot(b.pos.x - it.x, b.pos.y - it.y, b.pos.z - it.z));
+        }
+        if (ahead * it.side < -8) {
+          it.passed = true;
+          if (it.hits === 0 && it.closest < close) G.moment('near');
+        }
+        // A jet close by shakes the air.
+        if (it.big) G.shake = Math.max(G.shake, 0.45 * (1 - clamp(Math.hypot(it.x - c.x, it.y - c.y, it.z - c.z) / 60)));
       }
       if (!playing || it.hits >= it.max || Math.abs(it.z - c.z) > it.reach + 40) continue;
       for (const b of [...flock.birds]) {
