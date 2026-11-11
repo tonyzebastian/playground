@@ -23,9 +23,11 @@
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "tailwind-merge": "^2.5.5",
+    "three": "^0.184.0",
     "webgpu-brush": "^3.0.0"
   },
   "devDependencies": {
+    "@dgreenheck/ez-tree": "^1.1.0",
     "@eslint/eslintrc": "^3",
     "eslint": "^9",
     "eslint-config-next": "15.5.9",

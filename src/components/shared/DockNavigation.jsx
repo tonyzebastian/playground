@@ -38,6 +38,7 @@ export default function DockNavigation() {
 
   if (
     !mounted ||
+    pathname?.startsWith('/experiences/flock') ||
     pathname?.startsWith('/kalimba') ||
     pathname?.startsWith('/vault/') ||
     pathname?.startsWith('/feelings') ||

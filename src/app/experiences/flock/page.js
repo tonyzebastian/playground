@@ -3,7 +3,7 @@ import Flock from "./Flock";
 
 export const metadata = {
   title: "Flock in Flight - UiGlow",
-  description: "A flock of birds gliding over ever-changing landscapes. Press and hold to fly faster.",
+  description: "Lead a flock of birds across a painted 3D landscape. Steer around aircraft, balloons and hawks, and dive under storms.",
 };
 
 export default function FlockPage() {
@@ -12,7 +12,7 @@ export default function FlockPage() {
       <div className="pointer-events-none absolute inset-x-0 top-0 z-50 [&_a]:pointer-events-auto">
         <AppHeader title="Flock in Flight" tone="light" />
       </div>
-      <Flock showHint />
+      <Flock game />
     </main>
   );
 }

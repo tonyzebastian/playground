@@ -68,7 +68,10 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning className={`${merriweather.variable} ${raleway.variable}`}>
       <head>
+        {/* Browser extensions often put a script of their own at the top of <head> before React
+            hydrates, and React then compares this one against it. That is not a real mismatch. */}
         <script
+          suppressHydrationWarning
           dangerouslySetInnerHTML={{
             __html: `
               // Pages shown inside the home split panel drop their own
