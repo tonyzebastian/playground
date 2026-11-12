@@ -19,6 +19,12 @@ export const ISOMETRIC_ANIMATIONS = [
     src: '/isometric-animations/tennis-stadium.html',
     aspect: 4 / 3,
   },
+  {
+    id: 'house-through-time',
+    title: 'A House Through Time',
+    src: '/isometric-animations/house-through-time.html',
+    aspect: 1.1,
+  },
 ];
 
 // One DialKit panel drives every animation. Numeric controls are [default, min, max, step].
