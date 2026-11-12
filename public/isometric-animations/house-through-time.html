@@ -557,8 +557,8 @@ function chim(x0c, x1c, y0c, y1c, zTop, R, m, capM){
   if (capM) s += blk(x0c - .5, y0c - .5, zTop, x1c + .5, y1c + .5, zTop + 1.2, capM, .9);
   return s;
 }
-function tuft(x, y, s, m){
-  return [[-1, .7, 3], [.3, -.2, 4.2], [1.2, .5, 2.8]].map(([dx, dy, h]) => horn([[x, y, G], [x + dx * s * .45, y + dy * s * .45, G + h * s * .6], [x + dx * s, y + dy * s, G + h * s]], .55 * s, .05, m, .6)).join('');
+function tuft(x, y, s, m, z = G){
+  return [[-1, .7, 3], [.3, -.2, 4.2], [1.2, .5, 2.8]].map(([dx, dy, h]) => horn([[x, y, z], [x + dx * s * .45, y + dy * s * .45, z + h * s * .6], [x + dx * s, y + dy * s, z + h * s]], .55 * s, .05, m, .6)).join('');
 }
 const shadowOf = pts => castShadow(pts, G);
 // smoke that seeps out through thatch or tiles (no chimney): faint puffs at several points
@@ -1202,9 +1202,9 @@ const PEOPLE4 = [
 /* ---- 2025: plugging in the car, a laptop on the deck, a jogger, watering the planter ---- */
 const JOGK = [kf(0, -14, -14), kf(11, 114, -14), kf(22, 114, 114), kf(33, -14, 114), kf(44, -14, -14)];
 const PEOPLE5 = [
-  who(still(70.6, 20.8, 'plug', -100), (r, e) => { const plugged = (e.T % 8) < 5;
+  who(still(75.6, 24, 'plug', 180), (r, e) => { const plugged = (e.T % 8) < 5;
     return person({ x: r.x, y: r.y, face: r.face, T: e.T, top: '#3e86d9', bottom: '#2e3440', hair: '#2a2420', skin: SKIN.c, shoe: '#f4f4f4',
-      handsW: plugged ? [[70.4, 18.6, G + 5.4], [71.6, 19.8, G + 4.6]] : [[71, 19.6, G + 5.8], [70, 19.6, G + 5.4]],
+      handsW: plugged ? [[73.5, 23.7, G + 8.8 + .25 * Math.sin(e.T * 6)], [74.4, 25, G + 5.6]] : [[74.3, 23.2, G + 6], [74.3, 24.6, G + 5.6]],
       tool: h => plugged ? '' : fill(pd([add3(h[1], [-.4, 0, .5]), add3(h[1], [.4, 0, .5]), add3(h[1], [.4, 0, -.5]), add3(h[1], [-.4, 0, -.5])]), '#9fe0ff') }); }),
   who(still(73, 46, 'sit', 0), (r, e) => {
     let s = prismOf(on(PY(43.5), [[69.5, G], [78.5, G], [78.5, G + 1.8], [69.5, G + 1.8]]), on(PY(48.5), [[69.5, G], [78.5, G], [78.5, G + 1.8], [69.5, G + 1.8]]), mat('#e9e6df'), .8, 1.1)
@@ -1214,10 +1214,11 @@ const PEOPLE5 = [
       tool: (h, W3) => blkP(W3(1.2, -1.2, 3), W3(3.2, 1.2, 3.2), mat('#c6ccd2'), .6) + shape([W3(1.3, -1.1, 3.2), W3(1.3, 1.1, 3.2), W3(.9, 1.1, 5), W3(.9, -1.1, 5)], '#bfe6ff', .6) });
   }),
   who(JOGK, (r, e) => person({ x: r.x, y: r.y, face: r.face, T: e.T, legs: 'run', top: '#f2c230', bottom: '#2e3440', hair: '#2a2420', skin: SKIN.b, shoe: '#e2483d', lean: .35 })),
-  who(still(79.6, 80.4, 'water', 180), (r, e) => {
+  who(still(72, 88.6, 'water', -90), (r, e) => {
     let s = person({ x: r.x, y: r.y, face: r.face, T: e.T, top: '#7fae58', bottom: '#5a5048', hat: hatBrim('#e9dcb8', 1.8), skin: SKIN.a, hands: [[2, .4, 4.2], null],
       tool: (h, W3) => blkP(W3(2, -.6, 3.4), W3(3.2, .6, 4.6), mat('#4f8fb0'), .7) + rod(W3(3.2, 0, 4.2), W3(4.6, 0, 4.8), .15, mat('#4f8fb0'), tone, .5) });
-    for (let i = 0; i < 4; i++){ const q = (e.T * 1.5 + i / 4) % 1, [X, Y] = P(r.x - 4.7 - q * 1.2, r.y, G + 4.6 - 3 * q * q); s += circ(X, Y, .3, '#8fcbe5'); }
+    const fx = Math.cos(r.face), fy = Math.sin(r.face);
+    for (let i = 0; i < 4; i++){ const q = (e.T * 1.5 + i / 4) % 1, d = 4.7 + q * 1.2, [X, Y] = P(r.x + fx * d, r.y + fy * d, G + 4.6 - 1.4 * q * q); s += circ(X, Y, .3, '#8fcbe5'); }
     return s;
   }),
 ];
@@ -1225,10 +1226,10 @@ const PEOPLE5 = [
 /* ---- 2150: taking the parcel from the drone, kids paddling a coracle, the roof gardener ---- */
 const DPER = 16;
 const dronePath = T => { const t = ((T % DPER) + DPER) % DPER;
-  if (t < 5) { const q = ease(t / 5); return { p: [lerp(122, 78.5, q), lerp(46, 32.4, q), lerp(G + 34, G + 13, q)], has: true }; }
-  if (t < 7.5) return { p: [78.5, 32.4, G + 13 + .5 * Math.sin(T * 2.2)], has: true };
-  const q = ease(Math.min(1, (t - 7.5) / 6)); return { p: [lerp(78.5, 122, q), lerp(32.4, 46, q), lerp(G + 13, G + 36, q)], has: false }; };
-const RECV = [kf(0, 77, 32.2, 'wait', 0, G + 1.5), kf(7.5, 77, 32.2, 'hold', 0, G + 1.5), kf(9, 77, 32.2, 'hold', 0, G + 1.5), kf(12.5, 66.5, 32.2, 'hold', 180, G + 6.75), kf(13.5, 66.5, 32.2, 'stand', 0, G + 6.75), kf(16, 77, 32.2, 'wait', 0, G + 1.5)];
+  if (t < 5) { const q = ease(t / 5); return { p: [lerp(122, 78.5, q), lerp(46, 37.4, q), lerp(G + 34, G + 13, q)], has: true }; }
+  if (t < 7.5) return { p: [78.5, 37.4, G + 13 + .5 * Math.sin(T * 2.2)], has: true };
+  const q = ease(Math.min(1, (t - 7.5) / 6)); return { p: [lerp(78.5, 122, q), lerp(37.4, 46, q), lerp(G + 13, G + 36, q)], has: false }; };
+const RECV = [kf(0, 77, 37.2, 'wait', 0, G + 1.5), kf(7.5, 77, 37.2, 'hold', 0, G + 1.5), kf(9, 77, 37.2, 'hold', 0, G + 1.5), kf(12.5, 66.5, 37.2, 'hold', 180, G + 6.75), kf(13.5, 66.5, 37.2, 'stand', 0, G + 6.75), kf(16, 77, 37.2, 'wait', 0, G + 1.5)];
 const boatAt = T => { const a = T * .32; return { x: 42 + 9 * Math.cos(a), y: 102 + 7 * Math.sin(a), face: a + Math.PI / 2 }; };
 const PEOPLE6 = [
   who(RECV, (r, e) => { const t = ((e.T % DPER) + DPER) % DPER, hold = t >= 7.5 && t < 13.5, reach = !hold && t > 4.2 && t < 7.5;
@@ -1244,20 +1245,24 @@ const PEOPLE6 = [
         s += person({ x: px, y: py, z: G - .3, face: b.face + (sd > 0 ? Math.PI : 0) * 0, T: e.T, k: .72, legs: 'sit', top: sd > 0 ? '#f2c230' : '#e2483d', bottom: '#3d5a73', hair: sd > 0 ? '#2a2420' : '#c9862a', skin: SKIN.a,
           hands: [[1.6, 1.2, 3.4 + pd2 * sd], [1.6, -1.2, 3.4 - pd2 * sd]], tool: (h, W3) => rod(h[0], W3(2, 3.4, -.6 + pd2), .14, TIMBER, tone, .5) }); });
       return s; } },
-  who(still(32, 52, 'water', 30, G + 54), (r, e) => person({ x: r.x, y: r.y, z: r.z, face: r.face, T: e.T, top: '#f2a0b4', bottom: '#5a5048', hat: hatBrim('#e9dcb8', 1.8), skin: SKIN.a,
-    hands: [[1.9, .4, 4.1], null], tool: (h, W3) => blkP(W3(1.9, -.6, 3.4), W3(3.1, .6, 4.6), mat('#4f8fb0'), .7) }), { dk: 101.02, noShadow: true }),
+  who(still(-7.6, 70, 'tend', 180), (r, e) => { const lift = .3 * Math.sin(e.T * 1.3);
+    return person({ x: r.x, y: r.y, face: r.face, T: e.T, top: '#f4f1ea', bottom: '#d9d3c4', hat: hatBrim('#f4f1ea', 2), skin: SKIN.a, shoe: '#5a5048',
+      hands: [[1.8, .7, 4.3 + lift], [1.8, -.7, 4.3 + lift]], tool: (h, W3) => blkP(W3(1.9, -.9, 3.4 + lift), W3(2.2, .9, 5.6 + lift), mat('#e8b23a'), .6) }); }),
 ];
 
 /* ---- AD 10,000: a traveller steps out of the portal with a little robot, a rider circles the island on a hover-board ---- */
-const WALK7 = [kf(0, 87.5, 58, 'appear', 0), kf(1.4, 87.5, 58), kf(5.4, 68, 56, 'stand', 200), kf(8.4, 68, 56), kf(12.2, 87.5, 58, 'vanish', 0), kf(13.6, 87.5, 58)];
-const ROBO = WALK7.map(k2 => ({ ...k2, x: k2.x - 1.8, y: k2.y + 3.4 }));
+// out of the house, along the dashed path and into the back of the portal; out of its front, then round it (clear of
+// its ring and stands) and home again. Drawn at their true depth, so the portal's ring hides them as they go through.
+const WALK7 = [kf(0, 72.5, 56, 'appear', 0), kf(1.4, 72.5, 56), kf(4.8, 80, 58, 'vanish', 0), kf(6.2, 80, 58), kf(6.21, 89.5, 58, 'appear', 0), kf(7.6, 89.5, 58),
+  kf(9.6, 91, 40), kf(12.4, 77, 39), kf(14.4, 72.5, 49), kf(15.2, 72.5, 56, 'vanish', 180), kf(16.6, 72.5, 56)];
+const ROBO = WALK7.map(k2 => ({ ...k2, x: k2.x - 1.8, y: k2.y - 3.4 }));
 const fadeOf = r => r.s === 'appear' ? clamp01(r.lt / 1.2) : r.s === 'vanish' ? 1 - clamp01(r.lt / 1.2) : 1;
 const hoverAt = T => { const a = -T * .42; return { x: 50 + 66 * Math.cos(a), y: 50 + 66 * Math.sin(a), z: G + 13 + 2 * Math.sin(T * 1.3), face: a - Math.PI / 2 }; };
 const PEOPLE7 = [
   who(WALK7, (r, e) => person({ x: r.x, y: r.y, face: r.face, T: e.T, op: fadeOf(r), legs: r.walk ? 'walk' : 'stand', top: '#f4f2fb', bottom: '#c9c2e6', hair: '#2d2758', skin: SKIN.d, shoe: '#5fe8f2',
-    hands: r.s === 'stand' ? [[.5, 1.2, 3.4], [1.5, -.9, 5 + .5 * Math.sin(e.T * 2)]] : null }) + (fadeOf(r) < 1 ? glow([r.x, r.y, G + 4], 6, 'gP', 1 - fadeOf(r)) : ''), { dk: 170 }),
+    hands: null }) + (fadeOf(r) < 1 ? glow([r.x, r.y, G + 4], 6, 'gP', 1 - fadeOf(r)) : '')),
   who(ROBO, (r, e) => { const c = [r.x, r.y, G + 3 + .5 * Math.sin(e.T * 3)], op = fadeOf(r);
-    return `<g opacity="${op.toFixed(2)}">` + ball(c, 1.2, mat('#eef0f6'), { w: .9 }) + (() => { const [X, Y] = P(c[0] + Math.cos(r.face) * 1.1, c[1] + Math.sin(r.face) * 1.1, c[2] + .2); return circ(X, Y, .45, CYAN); })() + glow([r.x, r.y, G + .1], 2.5, 'gC', .6) + '</g>'; }, { dk: 170, noShadow: true }),
+    return `<g opacity="${op.toFixed(2)}">` + ball(c, 1.2, mat('#eef0f6'), { w: .9 }) + (() => { const [X, Y] = P(c[0] + Math.cos(r.face) * 1.1, c[1] + Math.sin(r.face) * 1.1, c[2] + .2); return circ(X, Y, .45, CYAN); })() + glow([r.x, r.y, G + .1], 2.5, 'gC', .6) + '</g>'; }, { noShadow: true }),
   { seq: PSEQ, at: e => { const h = hoverAt(e.T); return [h.x, h.y, h.z]; }, anc: [50, 50, G + 13],
     draw: e => { const h = hoverAt(e.T), f2 = [Math.cos(h.face), Math.sin(h.face)], sv = [-f2[1], f2[0]];
       const cr = (a, b) => [h.x + f2[0] * a + sv[0] * b, h.y + f2[1] * a + sv[1] * b];
@@ -2125,7 +2130,7 @@ const ERA5 = {
     { seq: 5, at: [72, 80, G], sh: e => shadowOf(boxPts(68, 76, G, 76, 84, G + 8)),
       draw: e => {
         let s = blk(68, 76, G, 76, 84, G + 3.5, mat('#d8d5ce'), .9, 1.4) + shape(on(PZ(G + 3.55), rectUV(68.8, 76.8, 75.2, 83.2)), '#6a4a30', .6);
-        for (const [x, y] of [[70, 78.5], [73.5, 78], [71.5, 81.5], [74.5, 82]]) s += tuft(x, y, 1.15, mat('#8fbf5c'));
+        for (const [x, y] of [[70.6, 79.2], [73.6, 78.8], [71.4, 81.8], [74, 81.6]]) s += tuft(x, y, 1, mat('#8fbf5c'), G + 3.5);
         return s;
       } },
     { seq: 6, at: e => [100 + 7 * Math.cos(e.T * .35), 72 + 14 * Math.sin(e.T * .35), G], sh: null,
@@ -2192,12 +2197,12 @@ const ERA6 = {
         s += strokeP(on(PX(64.2), [[52, G + STL + 6.2], [52, G + STL + 16.8]]), POD.l, 1.1) + ink(pd(big), 1.3);
         s += blk(64, 38.5, G + STL + 18.5, 69.5, 65.5, G + STL + 19.5, WHITE6, .9, 1.2);
         for (const z of [G + STL + 14.6, G + STL + 10.8]) s += blk(64.1, 41.5, z, 66.4, 62.5, z + .45, WHITE6, .6);
-        s += shape(on(PX(64.1), rrUV(28.5, G + STL, 36.5, G + STL + 15, 3.6, 6)), '#78c7a5', 1.1) + shape(on(PX(64.2), ellUV(32.5, G + STL + 11.6, 1.6, 1.6, 14)), '#cdeef0', .6) + strokeP(on(PX(64.2), [[34.8, G + STL + 5.5], [34.8, G + STL + 8.5]]), INK, .8);
+        s += clipTo(on(PX(64.1), PROF6), shape(on(PX(64.1), rrUV(33.5, G + STL, 40, G + STL + 15, 3.2, 6)), '#78c7a5', 1.1)) + shape(on(PX(64.2), ellUV(36.75, G + STL + 11.6, 1.4, 1.4, 14)), '#cdeef0', .6) + strokeP(on(PX(64.2), [[38.6, G + STL + 5.5], [38.6, G + STL + 8.5]]), INK, .8);
         s += shape(on(PX(64.1), ellUV(72, G + STL + 13, 3.4, 3.4, 22)), POD.m, 1) + shape(on(PX(64.15), ellUV(72, G + STL + 13, 2.4, 2.4, 20)), '#3d5a73', .8);
         const ramp = [[64, G + STL - .7], [80, G - .2], [80, G + .5], [64, G + STL]];
-        s += prismOf(on(PY(28.5), ramp), on(PY(36), ramp), WHITE6, .9, 1.4);
-        for (const x of [66, 72, 78]) s += line([[x, 36, G + STL - (x - 64) / 2], [x, 36, G + STL - (x - 64) / 2 + 3.2]], .7);
-        s += line([[64, 36, G + STL + 3.2], [80, 36, G + 3.2]], .9);
+        s += prismOf(on(PY(33.5), ramp), on(PY(41), ramp), WHITE6, .9, 1.4);
+        for (const x of [66, 72, 78]) s += line([[x, 41, G + STL - (x - 64) / 2], [x, 41, G + STL - (x - 64) / 2 + 3.2]], .7);
+        s += line([[64, 41, G + STL + 3.2], [80, 41, G + 3.2]], .9);
         return s + hullInk([...on(PX(20), PROF6), ...on(PX(64), PROF6)], 2.6);
       } },
     { seq: 1, at: [42, 53, G + STL + 25], dk: 101.01,
@@ -2318,7 +2323,13 @@ function mushroom(x, y, k, col){
 }
 const ORBS = [[76, 26, G + 22], [64, 90, G + 30], [20, 72, G + 44]];
 const orbAt = (i, T) => { const [x, y, z] = ORBS[i]; return [x, y, z + 1.5 * Math.sin(T * 1.3 + i * 2)]; };
-const saucerAt = T => { const a = T * .32; return [50 + 84 * Math.cos(a), 50 + 84 * Math.sin(a), G + 48 + 2 * Math.sin(T)]; };
+// the saucer flies one lap round the island, comes down on its pad (PAD), rests, and climbs back to the lap
+const PAD = [86, 8], SLAP = 2 * Math.PI / .32, SPER = SLAP + 10, SA0 = deg(-49);
+const saucerAt = T => { const t = ((T % SPER) + SPER) % SPER, lap = a => [50 + 84 * Math.cos(a), 50 + 84 * Math.sin(a)];
+  if (t < SLAP){ const [x, y] = lap(SA0 + t * .32); return [x, y, G + 48 + 2 * Math.sin(T) * Math.sin(Math.PI * t / SLAP)]; }
+  const u = t - SLAP, top = [...lap(SA0), G + 48], pad = [PAD[0], PAD[1], G + 2.4];
+  const q = u < 3 ? ease(u / 3) : u < 7 ? 1 : 1 - ease((u - 7) / 3);
+  return [lerp(top[0], pad[0], q), lerp(top[1], pad[1], q), lerp(top[2], pad[2], Math.min(1, q * 1.15))]; };
 const ERA7 = {
   name: 'Far Future', short: 'Future', year: 10000, ground: '#efeaf9', soil: '#a191c7', paper: '#ece6f5',
   desc: 'The plot lifts off: a floating island, an orbiting halo, light crystals and a portal gate.',
@@ -2335,7 +2346,7 @@ const ERA7 = {
     { seq: 1, at: [46, 54, G + 3], dk: 104.01, anc: [46, 54, G + 3],
       sh: e => shadowOf([...rng(SC[0], SC[1], SC[2], SR, 18), [46, 54, G + 3], [44, 52, G + 3], [48, 56, G + 3]]),
       draw: e => orbHouse(e.T) },
-    ...[[16, 24, 44, 3.2], [25, 13, 28, 2.4], [9, 38, 22, 2.2], [86, 90, 14, 1.8], [92, 82, 9, 1.4]].map(([x, y, h, r], i) => ({
+    ...[[-6, 36, 44, 3.2], [25, 13, 28, 2.4], [9, 38, 22, 2.2], [86, 90, 14, 1.8], [92, 82, 9, 1.4]].map(([x, y, h, r], i) => ({
       seq: 2, at: [x, y, G], sh: e => shadowOf(lathePts(x, y, [[G, r], [G + h, .01]])), draw: e => crystal(x, y, h, r),
       fx: e => glow([x, y, G + h * .8], r * 3, 'gC', .45 + .2 * Math.sin(e.T * 2 + i)) })),
     { seq: 3, at: [84, 58, G], sh: e => shadowOf(on(PX(84), ellUV(58, G + 13, 11, 11, 20))), draw: e => portal(e.T), fx: e => glow([86.2, 58, G + 13], 13, 'gP', .3 + .12 * Math.sin(e.T * 2)) },
@@ -2356,6 +2367,248 @@ const ERA7 = {
     ...PEOPLE7,
   ],
 };
+
+/* ============================================================ extra detail for the last three ages
+   Everything here sits in ground that was empty: clear of the houses, their paths and every walker's route
+   (the 2025 jogger runs the square x/y = -14..114; the 10,000 rider circles 66 from (50, 50) at G+13..24). */
+
+/* ---- 2025: a fence on the street sides, mailbox and bins, a barbecue and parasol on the deck, a trampoline,
+   a dog after a ball, shrubs and a small tree along the back ---- */
+const FENCE = mat('#e9e2d2'), BUSH = mat('#7fb05a'), BUSH2 = mat('#6a9e4c');
+function fence(){
+  // posts every 6, two rails; the x = 121.5 side leaves a gap for the driveway (y 2..27)
+  const runs = [[[121.5, -21], [121.5, -1]], [[121.5, 32], [121.5, 121.5]], [[121.5, 121.5], [-21, 121.5]]];
+  let s = '';
+  for (const [[x0, y0], [x1, y1]] of runs){
+    const L = Math.hypot(x1 - x0, y1 - y0), n = Math.max(1, Math.round(L / 6)), pts = [];
+    for (let i = 0; i <= n; i++) pts.push([lerp(x0, x1, i / n), lerp(y0, y1, i / n)]);
+    pts.sort((a, b) => depthOf([...a, 0]) - depthOf([...b, 0]));
+    for (const z of [G + 1.4, G + 3]) s += blkP([Math.min(x0, x1) - .25, Math.min(y0, y1) - .25, z], [Math.max(x0, x1) + .25, Math.max(y0, y1) + .25, z + .6], FENCE, .6);
+    for (const [x, y] of pts) s += blk(x - .5, y - .5, G, x + .5, y + .5, G + 4.2, FENCE, .7);
+  }
+  return s;
+}
+function bin(x, y, lid){
+  return blk(x - 1.5, y - 1.5, G, x + 1.5, y + 1.5, G + 4.4, mat('#4a5560'), .8, 1) + blk(x - 1.7, y - 1.7, G + 4.4, x + 1.7, y + 1.7, G + 5, mat(lid), .8)
+    + wheelV([x + 1.6, y - 1, G + .7], [0, 1], .7, 0, '#2e2b29', 4, .6);
+}
+function bbq(x, y, T){
+  const legs = [0, 2.1, 4.2].map(a => [x + 1.4 * Math.cos(a), y + 1.4 * Math.sin(a)]).sort((a, b) => a[0] + a[1] - b[0] - b[1]);
+  let s = legs.map(([lx, ly]) => rod([lx, ly, G], [x, y, G + 3.4], .2, mat('#2f3338'), tone, .5)).join('');
+  s += lathe(x, y, [[G + 3, 1], [G + 3.6, 1.9], [G + 4.6, 2.1]], mat('#2f3338'), { sil: 1, n: 18, capCol: '#e2703a' });
+  s += lathe(x - .5, y + .6, [[G + 4.7, 2], [G + 5.6, 1.7], [G + 6.2, .9], [G + 6.4, .01]], mat('#3a3f45'), { sil: 1, n: 18 });
+  return s + smoke([x, y, G + 6.4], T, { n: 4, rate: .22, rise: 14, r0: .8, r1: 2.8, dx: -2, dy: 3, op: .8 });
+}
+function parasol(x, y){
+  return rod([x, y, G], [x, y, G + 9.4], .25, mat('#e9e6df'), tone, .6)
+    + lathe(x, y, [[G + 7.4, 5.2], [G + 8.6, 3.4], [G + 9.6, .01]], mat('#e2703a'), { sil: 1.2, n: 16, cap: false })
+    + strokeP(frontArc(x, y, G + 7.4, 5.2), '#f6e7d2', .9);
+}
+// a kid bouncing on a trampoline
+const TRAMP = [0, 104, 6];
+function trampoline(T){
+  const [x, y, r] = TRAMP, h = G + 3.2, b = Math.abs(Math.sin(T * 2.6)), dip = (1 - b) * .9;
+  let s = '';
+  for (const a of [45, 135, 225, 315].map(d => deg(d)).sort((p, q) => Math.cos(p) + Math.sin(p) - Math.cos(q) - Math.sin(q))) s += rod([x + r * Math.cos(a), y + r * Math.sin(a), G], [x + r * Math.cos(a), y + r * Math.sin(a), h], .3, mat('#5a6168'), tone, .6);
+  s += lathe(x, y, [[h - .3, r + .5], [h + .2, r + .5]], mat('#3e86d9'), { sil: 1.1, n: 30, capCol: '#3e86d9' });
+  s += fill(pd(rng(x, y, h + .22, r - 1)), '#2a2c30') + ink(pd(rng(x, y, h + .22, r - 1)), .6);
+  if (dip > .1) s += fill(pd(rng(x, y, h + .23, 2 + dip)), '#1d1f22', 'opacity=".6"');
+  return s + person({ x, y, z: h + .2 + b * 6, face: deg(45), T, k: .75, legs: 'stand', top: '#f39ac4', bottom: '#3e5a7a', hair: '#2a2420', skin: SKIN.b,
+    hands: [[.2, 1.4, 6.6 - b * 1.4], [.2, -1.4, 6.6 - b * 1.4]] });
+}
+// the dog runs a loop on the front lawn after a bouncing ball
+const dogLoop = T => { const a = T * .9; return { x: 100 + 9 * Math.cos(a), y: 102 + 5 * Math.sin(a), face: a + Math.PI / 2 }; };
+const ERA5_EXTRA = [
+  { seq: 6, at: [121.5, 121.5, G], dk: 400, sh: null, draw: e => fence() },
+  { seq: 6, at: [118.5, 31, G], sh: e => shadowOf(boxPts(117.6, 30, G, 119.4, 32, G + 6)),
+    draw: e => rod([118.5, 31, G], [118.5, 31, G + 4.6], .3, mat('#5a6168'), tone, .6) + blk(117.3, 30.1, G + 4.6, 119.7, 31.9, G + 6.3, mat('#2f3338'), .8, 1) + blk(118.4, 31.9, G + 5.6, 118.6, 32.4, G + 7.2, mat('#e2483d'), .5) },
+  { seq: 6, at: [118, -8, G], sh: e => shadowOf(boxPts(116.5, -11.5, G, 119.5, -2.5, G + 5)), draw: e => bin(118, -9.5, '#3e86d9') + bin(118, -4.5, '#4a5560') },
+  { seq: 6, at: [79, 33.5, G], sh: e => shadowOf(lathePts(79, 33.5, [[G, 2], [G + 6, 2]])), draw: e => bbq(79, 33.5, e.T) },
+  { seq: 6, at: [75, 58, G], sh: e => halfShadow(lathePts(75, 58, [[G + 7.4, 5.2], [G + 9.6, .2]])), draw: e => parasol(75, 58) },
+  { seq: 7, at: [TRAMP[0], TRAMP[1], G], sh: e => halfShadow(lathePts(TRAMP[0], TRAMP[1], [[G, TRAMP[2]], [G + 3.4, TRAMP[2]]])), draw: e => trampoline(e.T) },
+  { seq: PSEQ, at: e => { const d = dogLoop(e.T); return [d.x, d.y, G]; }, sh: e => { const d = dogLoop(e.T); return pShadow(d.x, d.y, .45); },
+    draw: e => { const d = dogLoop(e.T); return dog(d.x, d.y, d.face, e.T, true, '#d8b07a'); } },
+  { seq: PSEQ, at: e => { const d = dogLoop(e.T + .7); return [d.x, d.y, G]; }, sh: null,
+    draw: e => { const d = dogLoop(e.T + .7), z = G + .7 + 3 * Math.abs(Math.sin(e.T * 4.2)); return ball([d.x, d.y, z], .7, mat('#d6e84a'), { w: .6 }); } },
+  ...[[72, -20, 2.8], [83, -21, 3.2], [95, -20, 2.6], [105, -21, 3], [-20, 34, 3], [-21, 46, 2.6], [-20, 70, 3.2]].map(([x, y, r], i) => ({
+    seq: 5, at: [x, y, G], sh: e => halfShadow(lathePts(x, y, [[G, r], [G + r * 1.6, r]])),
+    draw: e => ball([x, y, G + r * .8], r, i % 2 ? BUSH2 : BUSH) + ball([x + r * .5, y + r * .4, G + r * .55], r * .62, i % 2 ? BUSH : BUSH2, { hl: false, w: .9 }) })),
+  { seq: 5, at: [40, -20, G], sh: e => shadowOf([[40, -20, G], [40, -20, G + 15]]),
+    draw: e => rod([40, -20, G], [40, -20, G + 10], .7, mat('#8a6a4a'), tone, .9) + [[38.4, -18.8, G + 11, 3.2], [41.6, -21, G + 11.6, 3], [40, -20, G + 14, 4]].sort((a, b) => depthOf(a) - depthOf(b)).map(([x, y, z, r]) => ball([x, y, z], r, mat('#8cc463'))).join('') },
+];
+ERA5.parts.push(...ERA5_EXTRA);
+
+/* ---- 2150: reeds, lily pads and a heron in the pond, ducks, a floating solar raft, hydroponic towers,
+   wildflowers and beehives in the left corner, a cargo bike at the end of the stepping stones ---- */
+function reeds(x, y, T, n = 5){
+  let s = '';
+  const st = Array.from({ length: n }, (_, i) => [x + (hsh(i + x) - .5) * 4, y + (i - n / 2) * 1.6, 5 + 3 * hsh(i + y)]).sort((a, b) => a[0] + a[1] - b[0] - b[1]);
+  for (const [rx, ry, h] of st){ const sw = .5 * Math.sin(T * 1.4 + rx + ry);
+    s += horn([[rx, ry, G], [rx + sw * .4, ry, G + h * .6], [rx + sw, ry, G + h]], .3, .08, mat('#6f9e4a'), .5);
+    s += rod([rx + sw * .8, ry, G + h * .62], [rx + sw * .9, ry, G + h * .8], .45, mat('#8a5a34'), tone, .5); }
+  return s;
+}
+function lily(x, y, r, flower){
+  const pts = on(PZ(G + .1), arcUV(x, y, r, 25, 335, 16)); pts.push([x, y, G + .1]);
+  let s = shape(pts, '#6fb35a', .6);
+  if (flower) s += ball([x + .3, y + .3, G + .7], .7, mat('#f59bb0'), { hl: false, w: .5 });
+  return s;
+}
+function heron(x, y, T){
+  const peck = Math.max(0, Math.sin(T * .7)) > .92 ? 1 : 0, GREY = mat('#c9ced3');
+  let s = rod([x, y - .5, G], [x, y - .5, G + 4], .18, mat('#d9a441'), tone, .4) + rod([x, y + .5, G], [x, y + .5, G + 4], .18, mat('#d9a441'), tone, .4);
+  s += rod([x - 1.6, y, G + 5.4], [x + 1.4, y, G + 4.6], 1.1, GREY, tone, .8, .6);
+  const head = peck ? [x + 3.6, y, G + 3.2] : [x + 2.2, y, G + 9.4];
+  s += horn([[x + 1.2, y, G + 5], [x + 2.4, y, G + 7], head], .4, .3, mat('#eef0f2'), .6);
+  s += ball(head, .6, mat('#eef0f2'), { hl: false, w: .6 }) + horn([head, add3(head, peck ? [1.2, 0, -1.4] : [2, 0, -.3])], .2, .05, mat('#e8b23a'), .5);
+  return s;
+}
+function duck(x, y, face, T, i){
+  const bob = .15 * Math.sin(T * 3 + i), f2 = [Math.cos(face), Math.sin(face)], c = [x, y, G + .7 + bob], hd = [x + f2[0] * 1.2, y + f2[1] * 1.2, G + 2 + bob];
+  let s = strokeP(on(PZ(G + .1), ellUV(x - f2[0] * 1.5, y - f2[1] * 1.5, 1.6, 1.2, 12)), '#ffffff', .6, 'opacity=".6"');
+  s += ball(c, 1.1, mat(i ? '#a07a52' : '#f4f1ea'), { w: .6 }) + ball(hd, .6, mat(i ? '#3f7a4a' : '#f4f1ea'), { hl: false, w: .5 });
+  return s + rod(hd, add3(hd, [f2[0] * .9, f2[1] * .9, -.1]), .22, mat('#e8a23a'), tone, .4);
+}
+const duckAt = (T, i) => { const per = 26, t = (((T - i * 1.3) % per) + per) % per, q = t < per / 2 ? t / (per / 2) : 2 - t / (per / 2);
+  return { x: 72 + .6 * Math.sin(T * .9 + i), y: 74 + 24 * ease(q), face: t < per / 2 ? deg(90) : deg(-90) }; };
+function raft(){
+  let s = blk(68, 46, G - .2, 77, 58, G + .6, mat('#e9eef0'), .8, 1.1);
+  for (const y of [48, 52.5]){
+    const prof = [[69, G + 1.2], [76, G + 2.8], [76, G + 3.2], [69, G + 1.6]];
+    s += rod([75.5, y + 1, G + .6], [75.5, y + 1, G + 2.8], .2, STEEL, tone, .5) + prismOf(on(PY(y), prof), on(PY(y + 3.6), prof), mat('#36609e'), .7);
+  }
+  return s;
+}
+function tower(x, y, h, T){
+  let s = lathe(x, y, [[G, 1.6], [G + .8, 1.6], [G + .8, 1.1], [G + h, 1.1], [G + h + .6, 1.4]], mat('#f4f6f6'), { sil: 1, n: 16 });
+  const pots = [];
+  for (let i = 0; i < 12; i++){ const a = i * 1.9, z = G + 2 + (i / 12) * (h - 3); pots.push([x + 1.5 * Math.cos(a), y + 1.5 * Math.sin(a), z, i]); }
+  pots.filter(p => Math.cos(deg(-45)) * (p[0] - x) + Math.sin(deg(45)) * (p[1] - y) > -.4).sort((a, b) => depthOf(a) - depthOf(b))
+    .forEach(([px, py, pz, i]) => { s += ball([px, py, pz], .95, mat(i % 3 ? '#6db462' : '#8fd17a'), { hl: false, w: .6 }); if (i % 4 === 1){ const [X, Y] = P(px + .4, py + .4, pz + .5); s += circ(X, Y, .4, '#e2483d'); } });
+  return s;
+}
+function hive(x, y){
+  return blk(x - 1.8, y - 1.6, G, x + 1.8, y + 1.6, G + 1, mat('#8a6a4a'), .7)
+    + blk(x - 2, y - 1.8, G + 1, x + 2, y + 1.8, G + 3.4, mat('#f2d06b'), .8) + blk(x - 2, y - 1.8, G + 3.4, x + 2, y + 1.8, G + 5.6, mat('#f4f1ea'), .8)
+    + blk(x - 2.3, y - 2.1, G + 5.6, x + 2.3, y + 2.1, G + 6.3, mat('#7aa0a8'), .8, 1.1) + shape(on(PX(x + 2.05), rectUV(y - .9, G + 1.2, y + .9, G + 1.7)), '#3a2f28', .4);
+}
+const HIVES = [[-14, 66], [-14, 74], [-14, 82]];
+function bees(T){
+  let s = '';
+  for (let i = 0; i < 9; i++){ const [hx, hy] = HIVES[i % 3], a = T * (1.6 + .3 * hsh(i)) + i * 2.1, R = 3 + 5 * hsh(i + 9),
+    c = [hx + 4 + R * Math.cos(a), hy + R * Math.sin(a) * .8, G + 5 + 2.5 * Math.sin(T * 2.3 + i)], [X, Y] = P(...c);
+    s += circ(X, Y, .55, '#f2c23a', `stroke="${INK}" stroke-width=".45"`); }
+  return s;
+}
+function cargoBike(x, y){
+  const d = [1, 0];
+  let s = wheelV([x - 4, y, G + 1.5], d, 1.5, .3, '#2e2b29', 6, .7);
+  s += blk(x + 1, y - 1.6, G + 1.6, x + 4.6, y + 1.6, G + 4.4, mat('#4fa36a'), .8, 1);
+  s += rod([x - 4, y, G + 1.5], [x - 2.4, y, G + 5], .22, STEEL, tone, .5) + rod([x - 2.4, y, G + 5], [x + 1, y, G + 3.2], .22, STEEL, tone, .5) + rod([x - 4, y, G + 1.5], [x + 1, y, G + 2.2], .22, STEEL, tone, .5);
+  s += rod([x + .6, y, G + 3], [x + .2, y, G + 7], .2, STEEL, tone, .5) + rod([x + .2, y - 1.2, G + 7], [x + .2, y + 1.2, G + 7], .2, mat('#2e2b29'), tone, .5);
+  s += blk(x - 2.9, y - .5, G + 5, x - 1.9, y + .5, G + 5.4, mat('#2e2b29'), .5);
+  return s + wheelV([x + 2.8, y, G + 1.2], d, 1.2, .3, '#2e2b29', 6, .7);
+}
+// wildflowers in the left corner; HIVES stand at their back
+const ERA6_FLATS = ERA6.flats;
+ERA6.flats = e => {
+  let s = ERA6_FLATS(e) + blob(-8, 92, 12, 15, '#bfe0a4');
+  for (let i = 0; i < 46; i++){ const x = -18 + hsh(i + 500) * 22, y = 78 + hsh(i + 600) * 30; if (Math.hypot((x + 8) / 12, (y - 92) / 15) > 1) continue;
+    s += blob(x, y, .7, .6, ['#f59bb0', '#f6d33c', '#ffffff', '#b99ae6'][i % 4]); }
+  return s;
+};
+const ERA6_EXTRA = [
+  { seq: 5, at: [16, 106, G], draw: e => reeds(16, 106, e.T, 7) },
+  { seq: 5, at: [78, 112, G], draw: e => reeds(78, 112, e.T, 5) },
+  { seq: 4, at: [20, 113, G], dk: 0, draw: e => lily(20, 113, 2.6, true) + lily(24, 116, 1.8, false) + lily(26, 87, 2.2, true) + lily(62, 116, 2.4, false) + lily(66, 113, 1.6, true) },
+  { seq: 6, at: [74, 115, G], sh: e => halfShadow([[74, 115, G], [74, 115, G + 9]]), draw: e => heron(74, 115, e.T) },
+  ...[0, 1, 2].map(i => ({ seq: PSEQ, at: e => { const d = duckAt(e.T, i); return [d.x, d.y, G]; }, draw: e => { const d = duckAt(e.T, i); return duck(d.x, d.y, d.face, e.T, i); } })),
+  { seq: 4, at: [72, 52, G], sh: e => halfShadow(boxPts(68, 46, G, 77, 58, G + 3)), draw: e => raft() },
+  ...[[96, -4, 16], [106, 6, 13], [100, 16, 10]].map(([x, y, h]) => ({ seq: 5, at: [x, y, G], sh: e => shadowOf(lathePts(x, y, [[G, 1.6], [G + h, 1.4]])), draw: e => tower(x, y, h, e.T) })),
+  ...HIVES.map(([x, y]) => ({ seq: 5, at: [x, y, G], sh: e => shadowOf(boxPts(x - 2, y - 2, G, x + 2, y + 2, G + 6)), draw: e => hive(x, y) })),
+  { seq: PSEQ, at: [-6, 74, G + 6], sh: null, draw: e => bees(e.T) },
+  { seq: 6, at: [118, 48, G], sh: e => shadowOf(boxPts(114, 46.5, G, 123, 49.5, G + 7)), draw: e => cargoBike(118, 48) },
+];
+ERA6.parts.push(...ERA6_EXTRA);
+
+/* ---- 10,000: a stream that pours off the island's edge, floating planters, a glowing tree, the saucer's pad,
+   a robot pet round the hover-board rider, and a ringed planet and constellations in the sky ---- */
+const STREAM = [[48, 99], [52, 106], [49, 114], [52, 121], [52, 126]];
+const ERA7_FLATS = ERA7.flats;
+ERA7.flats = e => {
+  const L = STREAM.map(([x, y]) => [x - 2.2, y, G + .07]), R = STREAM.map(([x, y]) => [x + 2.2, y, G + .07]).reverse();
+  let s = ERA7_FLATS(e) + shape([...L, ...R], '#a9e4f2', .8) + blob(48, 98, 3.6, 3, '#a9e4f2') + ink(pd(on(PZ(G + .08), ellUV(48, 98, 3.6, 3, 18))), .7);
+  for (let i = 0; i < 4; i++){ const q = (e.T * .5 + i / 4) % 1, k = Math.min(STREAM.length - 2, Math.floor(q * (STREAM.length - 1))), r = q * (STREAM.length - 1) - k, a = STREAM[k], b = STREAM[k + 1];
+    s += strokeP([[lerp(a[0], b[0], r) - .8, lerp(a[1], b[1], r), G + .1], [lerp(a[0], b[0], r) + .4, lerp(a[1], b[1], r) + 2, G + .1]], '#ffffff', .8, `opacity="${(Math.sin(Math.PI * q) * .9).toFixed(2)}"`); }
+  return s + groundGlow([PAD[0], PAD[1], G], 9, 'gC', .3);
+};
+function waterfall(T){
+  const y = 125.6, x0 = 50, x1 = 54.4, z1 = G + .2, H = 58;
+  let s = '';
+  for (let k = 0; k < 4; k++){ const za = z1 - H * k / 4, zb = z1 - H * (k + 1) / 4, w = 1 + k * .25, op = 1 - k * .22;
+    s += fill(pd(on(PY(y), rectUV(x0 - (w - 1) * 2, zb, x1 + (w - 1) * 2, za))), '#a9e4f2', `opacity="${op.toFixed(2)}"`); }
+  s += strokeP(on(PY(y), [[x0, z1], [x0 - 1.4, z1 - H * .7]]), INK, .8, 'opacity=".7"') + strokeP(on(PY(y), [[x1, z1], [x1 + 1.4, z1 - H * .7]]), INK, .8, 'opacity=".7"');
+  for (let i = 0; i < 7; i++){ const q = (T * .6 + i / 7) % 1, xx = lerp(x0 + .6, x1 - .6, hsh(i + 700)), z = z1 - q * H * .9;
+    s += strokeP(on(PY(y + .05), [[xx, z], [xx, z - 4]]), '#ffffff', .9, `opacity="${(Math.sin(Math.PI * q) * .9).toFixed(2)}"`); }
+  return s + smoke([52, y + 1, z1 - H], T, { soft: true, n: 6, rate: .25, rise: 6, r0: 2, r1: 6.5, dx: 0, dy: 3, op: .7, col: '#eef8fb' });
+}
+// outside the rider's circle and clear (on screen) of the saucer's pad and its way down
+const PLANTERS = [[112, -12, G + 22, 3.4], [76, -12, G + 34, 3], [120, 20, G + 16, 2.6]];
+const planterAt = (i, T) => { const [x, y, z] = PLANTERS[i]; return [x, y, z + 1.4 * Math.sin(T * .9 + i * 2.2)]; };
+function planter(i, T){
+  const [x, y, z] = planterAt(i, T), r = PLANTERS[i][3];
+  let s = lathe(x, y, [[z - r * 1.5, .01], [z - r * .7, r * .7], [z, r], [z + .5, r]], mat('#b6a6dc'), { sil: 1.2, n: 14, capCol: '#7d6aa8' });
+  const lv = [[x - r * .3, y + r * .2, z + 1.4, r * .42], [x + r * .35, y - r * .25, z + 1.8, r * .48], [x, y, z + 2.6, r * .5]];
+  lv.sort((a, b) => depthOf(a) - depthOf(b)).forEach(([px, py, pz, pr], k) => { s += ball([px, py, pz], pr, mat(k % 2 ? '#8ff3c8' : '#b5f7ff'), { w: .7 }); });
+  return s;
+}
+function glowTree(T){
+  const x = 2, y = 66;
+  let s = horn([[x, y, G], [x + .4, y - .3, G + 7], [x - .3, y + .2, G + 13], [x, y, G + 17]], 1, .45, PEARL, .9);
+  s += horn([[x, y, G + 11], [x + 2.6, y - 1.4, G + 15], [x + 3.4, y - 1.8, G + 18]], .4, .2, PEARL, .7);
+  const crown = [[x - 3, y + 1.6, G + 18.5, 3.6], [x + 3.2, y - 1.6, G + 19, 3.4], [x - .6, y - 2.4, G + 21, 3.2], [x + .4, y + 1.2, G + 23, 4.2]];
+  crown.sort((a, b) => depthOf(a) - depthOf(b)).forEach(([px, py, pz, pr], k) => { s += `<g opacity=".88">${ball([px, py, pz], pr, mat(k % 2 ? '#d9c4ff' : '#c4f3ff'), { w: 1 })}</g>`; });
+  return s;
+}
+function treeSeeds(T){
+  let s = '';
+  for (let i = 0; i < 7; i++){ const q = (T * .14 + i / 7) % 1, c = [2 + (hsh(i + 800) - .5) * 8 + 3 * Math.sin(T * .8 + i), 66 + (hsh(i + 810) - .5) * 6, G + 20 + q * 22];
+    s += glow(c, 2.4, i % 2 ? 'gP' : 'gC', Math.sin(Math.PI * q) * .8) + (() => { const [X, Y] = P(...c); return circ(X, Y, .45, '#f6f0ff', `opacity="${Math.sin(Math.PI * q).toFixed(2)}"`); })(); }
+  return s;
+}
+function pad(T){
+  const [x, y] = PAD, Z = G + 1;
+  let s = lathe(x, y, [[G, 7.6], [Z, 7.6]], PEARL, { sil: 1.3, n: 30 });
+  s += strokeP(rng(x, y, Z + .05, 6, 30).concat([rng(x, y, Z + .05, 6, 30)[0]]), CYAN, 1, 'stroke-dasharray="1.2 1.6"');
+  for (let i = 0; i < 6; i++){ const a = i / 6 * 2 * Math.PI, on1 = (Math.floor(T * 3) + i) % 6 < 2, [X, Y] = P(x + 6.9 * Math.cos(a), y + 6.9 * Math.sin(a), Z + .1);
+    s += circ(X, Y, .55, on1 ? CYAN : '#cfc6e6', `stroke="${INK}" stroke-width=".4"`); }
+  return s + ink(pd(rng(x, y, Z + .06, 2.2, 18)), .7);
+}
+const petAt = T => { const h = hoverAt(T), a = T * 2.2; return [h.x + 4 * Math.cos(a), h.y + 4 * Math.sin(a), h.z + 6 + .6 * Math.sin(T * 3.1)]; };
+function sky(T){
+  const [X, Y] = P(-60, 40, G + 60), r = 8.5, tilt = -16;
+  const ringE = (half) => `<path d="M${f(X - 16)} ${f(Y)}A16 4.2 0 0 ${half} ${f(X + 16)} ${f(Y)}" fill="none" stroke="#b7a6e3" stroke-width="2.4" transform="rotate(${tilt} ${f(X)} ${f(Y)})"/>`
+    + `<path d="M${f(X - 16)} ${f(Y)}A16 4.2 0 0 ${half} ${f(X + 16)} ${f(Y)}" fill="none" stroke="${INK}" stroke-width=".6" transform="rotate(${tilt} ${f(X)} ${f(Y)})" opacity=".7"/>`;
+  let s = `<g opacity=".8">${ringE(1)}` + circ(X, Y, r, '#e6d9ff', `stroke="${INK}" stroke-width="1"`)
+    + `<path d="M${f(X - r * .95)} ${f(Y + 2)}Q${f(X)} ${f(Y + 4.5)} ${f(X + r * .95)} ${f(Y + 1)}" fill="none" stroke="#c9b6f2" stroke-width="1.6"/>` + circ(X + 2.6, Y - 3, 1.4, '#ffffff', 'opacity=".55"') + ringE(0) + '</g>';
+  const [CX, CY] = P(45, -75, G + 52), stars = [[0, 0], [9, -5], [17, -2], [24, -9], [14, 6], [31, -4]];
+  s += `<path d="M${stars.slice(0, 4).map(([a, b]) => `${f(CX + a)} ${f(CY + b)}`).join('L')}M${f(CX + 9)} ${f(CY - 5)}L${f(CX + 14)} ${f(CY + 6)}M${f(CX + 24)} ${f(CY - 9)}L${f(CX + 31)} ${f(CY - 4)}" fill="none" stroke="#b9a8e6" stroke-width=".6" stroke-dasharray="1.4 1.4"/>`;
+  stars.forEach(([a, b], i) => { s += circ(CX + a, CY + b, .9 + .5 * (i % 2), '#fffbe8', `stroke="${INK}" stroke-width=".4" opacity="${(.7 + .3 * Math.sin(T * 2 + i * 1.7)).toFixed(2)}"`); });
+  return s;
+}
+const ERA7_EXTRA = [
+  { seq: 4, at: [52, 125, G], dk: 450, sh: null, draw: e => waterfall(e.T) },
+  ...PLANTERS.map((p, i) => ({ seq: 4, at: e => planterAt(i, e.T), anc: p.slice(0, 3), sh: e => halfShadow(lathePts(p[0], p[1], [[p[2] - p[3], p[3]], [p[2], p[3]]])),
+    draw: e => planter(i, e.T), fx: e => glow(add3(planterAt(i, e.T), [0, 0, 2.4]), p[3] * 2.2, i % 2 ? 'gC' : 'gP', .45 + .15 * Math.sin(e.T * 1.6 + i)) })),
+  { seq: 3, at: [2, 66, G], sh: e => shadowOf(lathePts(2, 66, [[G, 1], [G + 18, 5], [G + 25, 3]])), draw: e => glowTree(e.T),
+    fx: e => glow([2, 66, G + 21], 9, 'gP', .4 + .1 * Math.sin(e.T * 1.2)) + treeSeeds(e.T) },
+  { seq: 2, at: [PAD[0], PAD[1], G], dk: 0, sh: null, draw: e => pad(e.T) },
+  { seq: PSEQ, at: e => petAt(e.T), anc: [50, 50, G + 19], sh: null,
+    draw: e => { const c = petAt(e.T), h = hoverAt(e.T), dir = Math.atan2(c[1] - h.y, c[0] - h.x) + Math.PI / 2;
+      return glow(c, 3, 'gC', .6) + ball(c, 1, mat('#eef0f6'), { w: .8 }) + (() => { const [X, Y] = P(c[0] + Math.cos(dir) * .9, c[1] + Math.sin(dir) * .9, c[2] + .2); return circ(X, Y, .35, CYAN); })(); } },
+  { seq: 6, at: [-60, 40, G + 60], dk: -1000, sh: null, draw: e => sky(e.T) },
+];
+ERA7.parts.push(...ERA7_EXTRA);
 
 const MOVES = [[ERA4, 31, 94, 27, 20], [ERA4, -8, 74, -8, -18], [ERA1, 82, 82, 10, 12], [ERA1, 12, 84, -26, 28], [ERA0, 8, 93, -24, 22], [ERA0, 93, 8, 22, -24], [ERA_ROMAN, 12, 90, -20, 18], [ERA_ROMAN, 90, 12, 12, -28], [ERA_ROMAN, 8, 70, -18, 4],
   [ERA3, 8, 22, -4, -38], [ERA3, 86, 86, -22.5, 14], [ERA3, 80, 23, -10, -9], [ERA3, 30, 90, -12, 14], [ERA4, 91, 42, 1, -8], [ERA6, 24, 86, 80, 14], [ERA6, 90, 86, 22, -22]];
@@ -2422,13 +2675,76 @@ function dust(u){
   for (let i = 0; i < 6; i++){ const p = [44 + (hsh(i + 20) - .5) * 34, 54 + (hsh(i + 30) - .5) * 34, G + 10 + 22 * hsh(i + 40) * q]; items.push({ p, r: (3 + 4 * hsh(i + 50)) * q }); }
   return items.sort((a, b) => depthOf(a.p) - depthOf(b.p)).map(it => { const [X, Y] = P(...it.p); return circ(X, Y, it.r * R3, '#f8f3e8', `stroke="${INK}" stroke-width=".9" opacity="${Math.min(1, q * 1.4).toFixed(2)}"`); }).join('');
 }
-function sparkles(u){
+function sparkles(u, col = '#fff4c4', seed = 0, n = 7){
   const q = Math.sin(Math.PI * clamp01((u - .8) / .2)); if (q < .03) return '';
   let s = '';
-  for (let i = 0; i < 7; i++){ const a = i / 7 * 2 * Math.PI + 1, R = 20 + 14 * hsh(i + 70), [X, Y] = P(44 + R * Math.cos(a), 54 + R * Math.sin(a), G + 14 + 36 * hsh(i + 80)), r = (2 + 2.2 * hsh(i + 90)) * q, k = r * .28;
-    s += `<path d="M${f(X)} ${f(Y - r)}L${f(X + k)} ${f(Y - k)}L${f(X + r)} ${f(Y)}L${f(X + k)} ${f(Y + k)}L${f(X)} ${f(Y + r)}L${f(X - k)} ${f(Y + k)}L${f(X - r)} ${f(Y)}L${f(X - k)} ${f(Y - k)}Z" fill="#fff4c4" stroke="${INK}" stroke-width=".8"/>`; }
+  for (let i = 0; i < n; i++){ const j = i + seed, a = i / n * 2 * Math.PI + 1 + seed, R = 20 + 14 * hsh(j + 70), [X, Y] = P(44 + R * Math.cos(a), 54 + R * Math.sin(a), G + 14 + 36 * hsh(j + 80)), r = (2 + 2.2 * hsh(j + 90)) * q, k = r * .28;
+    s += `<path d="M${f(X)} ${f(Y - r)}L${f(X + k)} ${f(Y - k)}L${f(X + r)} ${f(Y)}L${f(X + k)} ${f(Y + k)}L${f(X)} ${f(Y + r)}L${f(X - k)} ${f(Y + k)}L${f(X - r)} ${f(Y)}L${f(X - k)} ${f(Y - k)}Z" fill="${col}" stroke="${INK}" stroke-width=".8"/>`; }
   return s;
 }
+
+/* each age arrives with its own effect (keyed by the age being built, so scrubbing back plays it too) */
+const mid = u => Math.sin(Math.PI * clamp01((u - .2) / .6));
+const sortDraw = (items, fn) => items.sort((a, b) => depthOf(a.p) - depthOf(b.p)).map(fn).join('');
+// billowing puffs that cover the swap: col fill, rise = how far they climb
+function puffs(u, { col = '#f8f3e8', n = 14, rise = 4, size = 1, seed = 0, op = 1.4 }){
+  const q = mid(u); if (q < .03) return '';
+  const items = [];
+  for (let i = 0; i < n; i++){ const j = i + seed, a = i / n * 2 * Math.PI + .3 + seed, R = 26 + 8 * hsh(j);
+    items.push({ p: [44 + R * Math.cos(a), 54 + R * Math.sin(a), G + 1 + 9 * q * hsh(j + 3) + rise * (u - .2) * (1 + 2 * hsh(j + 5))], r: (2.8 + 4.5 * hsh(j + 7)) * q * size }); }
+  return sortDraw(items, it => { const [X, Y] = P(...it.p); return circ(X, Y, it.r * R3, col, `stroke="${INK}" stroke-width=".9" opacity="${Math.min(1, q * op).toFixed(2)}"`); });
+}
+// small bits thrown up and falling back in arcs (chips, leaves, confetti); shape(X, Y, i, spin) draws one
+function bits(u, n, seed, shape, { from = .15, to = .85, h = 40 } = {}){
+  const p = clamp01((u - from) / (to - from)); if (p <= 0 || p >= 1) return '';
+  let s = '';
+  for (let i = 0; i < n; i++){ const j = i + seed, a = hsh(j) * 2 * Math.PI, R0 = 8 + 14 * hsh(j + 1), R1 = R0 + 18 + 16 * hsh(j + 2),
+    R = lerp(R0, R1, p), z = G + 2 + 4 * (h + 10 * hsh(j + 3)) * p * (1 - p);
+    const [X, Y] = P(44 + R * Math.cos(a), 54 + R * Math.sin(a), z);
+    s += shape(X, Y, j, p * (6 + 6 * hsh(j + 4)) + j, Math.min(1, 4 * (1 - p))); }
+  return s;
+}
+// rising specks (embers, motes, orbs) with a glow
+function motes(u, n, seed, id, col, { from = .15, to = .95, r = 1.4, h = 55, sway = 5 } = {}){
+  let s = '';
+  for (let i = 0; i < n; i++){ const j = i + seed, st = from + (to - from - .3) * hsh(j), p = clamp01((u - st) / .3); if (p <= 0 || p >= 1) continue;
+    const a = hsh(j + 1) * 2 * Math.PI, R = 6 + 26 * hsh(j + 2), op = Math.sin(Math.PI * p),
+      c3 = [44 + R * Math.cos(a) + sway * Math.sin(p * 6 + j), 54 + R * Math.sin(a), G + 3 + h * p];
+    const [X, Y] = P(...c3);
+    s += glow(c3, r * 3.2, id, op * .8) + circ(X, Y, r * R3, col, `stroke="${INK}" stroke-width=".6" opacity="${op.toFixed(2)}"`); }
+  return s;
+}
+// a ring that sweeps out across the ground from the middle
+function ring(u, col, { from = .3, to = .75, w = 1.6, z = G + .4, dash = '' } = {}){
+  const p = clamp01((u - from) / (to - from)); if (p <= 0 || p >= 1) return '';
+  const R = 6 + 58 * outBack(p) * .9, pts = [];
+  for (let i = 0; i < 32; i++){ const a = i / 32 * 2 * Math.PI; pts.push(P(44 + R * Math.cos(a), 54 + R * Math.sin(a), z)); }
+  return `<path d="M${pts.map(([X, Y]) => `${f(X)} ${f(Y)}`).join('L')}Z" fill="none" stroke="${col}" stroke-width="${w}" ${dash ? `stroke-dasharray="${dash}"` : ''} opacity="${(1 - p).toFixed(2)}"/>`;
+}
+const rot = (X, Y, a, d) => `<g transform="translate(${f(X)} ${f(Y)}) rotate(${(a * 57.3 % 360).toFixed(0)})">${d}</g>`;
+const chip = col => (X, Y, j, a, op) => rot(X, Y, a, `<path d="M-2 -1.2L1.6 -1.8L2.2 1L-1 1.8Z" fill="${col}" stroke="${INK}" stroke-width=".7" opacity="${op.toFixed(2)}"/>`);
+const leaf = cols => (X, Y, j, a, op) => rot(X, Y, a, `<path d="M-3 0Q0 -2.4 3 0Q0 2.4 -3 0Z" fill="${cols[j % cols.length]}" stroke="${INK}" stroke-width=".7" opacity="${op.toFixed(2)}"/>`);
+const flake = cols => (X, Y, j, a, op) => rot(X, Y, a * 1.6, `<rect x="-1.8" y="-1" width="3.6" height="2" fill="${cols[j % cols.length]}" stroke="${INK}" stroke-width=".6" opacity="${op.toFixed(2)}"/>`);
+const pixel = cols => (X, Y, j, a, op) => `<rect x="${f(X - 1.6)}" y="${f(Y - 1.6)}" width="3.2" height="3.2" fill="${cols[j % cols.length]}" stroke="${INK}" stroke-width=".6" opacity="${(op * (.5 + .5 * Math.sin(a * 3))).toFixed(2)}"/>`;
+const TRANS = {
+  // the bronze smith's fire: smoky puffs and a shower of embers
+  'Stone Age':      u => puffs(u, { col: '#efe4d0' }) + sparkles(u),
+  'Bronze Age':     u => puffs(u, { col: '#d9cbb6', rise: 10, seed: 3 }) + motes(u, 16, 0, 'gO', '#ffb347', { h: 45 }) + sparkles(u, '#ffc56b', 2, 5),
+  // masons at work: stone chips fly and a ring of ochre dust
+  'Roman':          u => puffs(u, { col: '#efd9b4', n: 10, size: .8, seed: 7 }) + bits(u, 22, 40, chip('#e8dcc4'), { h: 30 }) + sparkles(u, '#ffe08a', 5, 6),
+  // timber and thatch: leaves and straw whirl up and settle
+  'Medieval':       u => bits(u, 26, 90, leaf(['#9cc36a', '#d8b24a', '#7fae5a']), { h: 48 }) + puffs(u, { col: '#f1ead5', n: 8, size: .7, seed: 11 }),
+  // soot and steam
+  'Industrial Age': u => puffs(u, { col: '#8d867d', rise: 14, size: 1.1, seed: 17 }) + puffs(u, { col: '#fbfaf6', n: 8, rise: 22, size: .8, seed: 23 }) + motes(u, 8, 30, 'gO', '#ff9a3c', { r: 1, h: 35 }),
+  // a housewarming: confetti
+  '20th Century':   u => bits(u, 34, 140, flake(['#ef6f5e', '#f4b829', '#5fa8e0', '#7fcf8a', '#f39ac4']), { h: 34, from: .2, to: .95 }) + puffs(u, { col: '#f8f3e8', n: 8, size: .7, seed: 29 }),
+  // digital: pixels blink in and a signal ring pulses out
+  '21st Century':   u => bits(u, 30, 200, pixel(['#6ff0ff', '#4c8df0', '#ffffff']), { h: 36 }) + ring(u, '#4c8df0', { dash: '3 2' }) + ring(u, '#6ff0ff', { from: .45, to: .9 }) + sparkles(u, '#c8f6ff', 8, 5),
+  // green future: seed fluff and sunny motes drift up
+  'Next Century':   u => motes(u, 18, 260, 'gY', '#fff6c8', { r: 1.2, h: 60, sway: 8 }) + bits(u, 18, 300, leaf(['#8fd17a', '#5fbf8f']), { h: 40 }) + ring(u, '#7fcf8a', { w: 1.2 }),
+  // the far future: a warp ring and violet orbs
+  'Far Future':     u => ring(u, '#c99bff', { w: 2.2, from: .25, to: .7 }) + ring(u, '#6ff0ff', { from: .4, to: .85 }) + motes(u, 20, 340, 'gP', '#e7d6ff', { r: 1.6, h: 70, sway: 10 }) + sparkles(u, '#e7d6ff', 13, 8),
+};
 
 /* ---------- the scene ---------- */
 function scene(st, pal){
@@ -2457,7 +2773,7 @@ function scene(st, pal){
     items.sort((a, b) => a.key - b.key);
     for (const it of items) s += wrapScale(it.p.draw(e), it.sc, it.anc);
     for (const it of items) if (it.p.fx) s += wrapScale(it.p.fx(e), it.sc, it.anc);
-    s += dust(u) + sparkles(u);
+    s += (TRANS[B.name] || (v => dust(v) + sparkles(v)))(u);
   } finally { OY += lift; }
   return s;
 }
@@ -2567,7 +2883,7 @@ const bar = document.createElement('div'); bar.className = 'pg-bar';
 // play through time
 const ppBtn = document.createElement('button'); ppBtn.className = 'b-sec';
 const drawPP = () => { const on = st.play && !st.frozen; ppBtn.innerHTML = on ? ICON.pause : ICON.play; ppBtn.title = on ? 'Pause' : 'Play through time'; ppBtn.setAttribute('aria-label', ppBtn.title); };
-ppBtn.onclick = () => { if (st.play && !st.frozen){ st.play = false; st.seg = null; st.target = Math.round(st.t); } else { st.frozen = false; if (st.t > NA - .02) st.t = 0; st.play = true; st.target = null; st.seg = null; st.hold = .4; } drawPP(); };
+ppBtn.onclick = () => { st.jump = null; if (st.play && !st.frozen){ st.play = false; st.seg = null; st.target = Math.round(st.t); } else { st.frozen = false; if (st.t > NA - .02) st.t = 0; st.play = true; st.target = null; st.seg = null; st.hold = .4; } drawPP(); };
 const g1 = document.createElement('div'); g1.className = 'grp'; g1.append(ppBtn);
 // the timeline: drag to travel, it settles on the nearest age when let go
 const gT = document.createElement('div'); gT.className = 'grp tl';
@@ -2610,17 +2926,26 @@ document.addEventListener('click', () => document.querySelectorAll('.sel.open,.g
 
 let dragging = false, lastTouch = 0;
 const tAt = ev => { const r = row.getBoundingClientRect(); return clamp01((ev.clientX - r.left) / r.width) * NA; };
-range.addEventListener('pointerdown', ev => { if (ev.button) return; dragging = true; lastTouch = performance.now(); range.setPointerCapture(ev.pointerId);
-  st.play = false; st.seg = null; st.target = null; st.t = tAt(ev); drawPP(); ui.render(); });
-range.addEventListener('pointermove', ev => { hoverT = tAt(ev); if (dragging){ st.t = hoverT; ui.render(); } });
-range.addEventListener('pointerleave', () => { if (!dragging) hoverT = null; });
-const release = () => { if (!dragging) return; dragging = false; lastTouch = performance.now(); hoverT = null; st.target = Math.round(st.t); };
+// a click glides to the nearest age (its transition plays); only a real drag scrubs the time directly
+let downX = 0, scrubbing = false;
+const goTo = to => { st.play = false; st.seg = null; st.target = null; to = Math.max(0, Math.min(NA, to));
+  const n = Math.abs(to - st.t); st.jump = n < .002 ? null : { from: st.t, to, p: 0, dur: Math.min(5, 1.4 + 1.1 * n) }; };
+range.addEventListener('pointerdown', ev => { if (ev.button) return; dragging = true; scrubbing = false; downX = ev.clientX; lastTouch = performance.now(); range.setPointerCapture(ev.pointerId);
+  goTo(Math.round(tAt(ev))); drawPP(); });
+range.addEventListener('pointermove', ev => { hoverT = tAt(ev);
+  if (dragging && !scrubbing && Math.abs(ev.clientX - downX) > 5){ scrubbing = true; st.jump = null; }
+  if (scrubbing){ st.t = hoverT; ui.render(); } });
+// while the pointer rests on the ruler, autoplay holds on the current age (a transition already under way finishes)
+let overRuler = false;
+range.addEventListener('pointerenter', () => { overRuler = true; });
+range.addEventListener('pointerleave', () => { overRuler = false; if (!dragging) hoverT = null; });
+const release = () => { if (!dragging) return; dragging = false; lastTouch = performance.now(); hoverT = null; if (scrubbing) st.target = Math.round(st.t); scrubbing = false; };
 range.addEventListener('pointerup', release); range.addEventListener('pointercancel', release);
 range.addEventListener('keydown', ev => {
   lastTouch = performance.now();
   const base = st.target ?? st.t, dir = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[ev.key];
-  if (dir){ ev.preventDefault(); st.play = false; st.seg = null; st.target = Math.max(0, Math.min(NA, dir > 0 ? Math.floor(base + .001) + 1 : Math.ceil(base - .001) - 1)); drawPP(); }
-  else if (ev.key === 'Home' || ev.key === 'End'){ ev.preventDefault(); st.play = false; st.seg = null; st.target = ev.key === 'Home' ? 0 : NA; drawPP(); }
+  if (dir){ ev.preventDefault(); goTo(dir > 0 ? Math.floor((st.jump ? st.jump.to : base) + .001) + 1 : Math.ceil((st.jump ? st.jump.to : base) - .001) - 1); drawPP(); }
+  else if (ev.key === 'Home' || ev.key === 'End'){ ev.preventDefault(); goTo(ev.key === 'Home' ? 0 : NA); drawPP(); }
 });
 let lastKey = '';
 function hud(){
@@ -2647,7 +2972,7 @@ addEventListener('message', e => {
   const d = e.data; if (!d || d.type !== 'figure-controls') return;
   if ('speed' in d) st.speed = +d.speed;
   if ('paused' in d){ st.frozen = !!d.paused; if (!d.paused && !dragging && st.target == null) st.play = true; }
-  if (d.restart){ st.t = 0; st.T = 0; st.target = null; st.seg = null; st.hold = 0; st.play = !st.frozen; }
+  if (d.restart){ st.jump = null; st.t = 0; st.T = 0; st.target = null; st.seg = null; st.hold = 0; st.play = !st.frozen; }
   if ('wobble' in d){ wobV = String(d.wobble); setWob(d.wobble); }
   if ('pal' in d){ if (!st.pal0) st.pal0 = st.pal; st.pal = PALS[d.pal] ? d.pal : st.pal0; col.redraw(); }
   drawPP(); ui.render();
@@ -2659,11 +2984,12 @@ function frame(){
   const now = performance.now(), raw = Math.min(.05, Math.max(0, (now - lastT) / 1000)); lastT = now;
   const dt = st.frozen ? 0 : raw * st.speed;
   st.T += dt;
-  if (!st.play && !st.frozen && !dragging && st.target == null && now - lastTouch > 6000){ st.play = true; st.hold = 0; st.seg = null; }
+  if (st.jump && !scrubbing){ const j = st.jump; j.p = Math.min(1, j.p + raw / j.dur); st.t = lerp(j.from, j.to, ease(j.p)); lastTouch = now; if (j.p >= 1){ st.t = j.to; st.jump = null; } }
+  if (!st.play && !st.frozen && !dragging && !st.jump && st.target == null && now - lastTouch > 6000){ st.play = true; st.hold = 0; st.seg = null; }
   if (st.play && !st.frozen){
     if (st.seg){ st.seg.p = Math.min(1, st.seg.p + dt / st.seg.dur); st.t = lerp(st.seg.from, st.seg.to, ease(st.seg.p)); if (st.seg.p >= 1){ st.seg = null; st.hold = 0; } }
-    else if (Math.abs(st.t - Math.round(st.t)) > .002){ const to = Math.min(NA, Math.floor(st.t) + 1); st.seg = { from: st.t, to, p: 0, dur: 2.3 * (to - st.t) + .2 }; }
-    else { st.hold += dt; if (st.hold > (st.t >= NA - .001 ? 3.5 : 2.2)){ if (st.t >= NA - .001){ st.t = 0; st.hold = 0; } else st.seg = { from: Math.round(st.t), to: Math.round(st.t) + 1, p: 0, dur: 2.6 }; } }
+    else if (Math.abs(st.t - Math.round(st.t)) > .002 && !overRuler){ const to = Math.min(NA, Math.floor(st.t) + 1); st.seg = { from: st.t, to, p: 0, dur: 2.3 * (to - st.t) + .2 }; }
+    else if (!overRuler){ st.hold += dt; if (st.hold > (st.t >= NA - .001 ? 7 : 5)){ if (st.t >= NA - .001){ st.t = 0; st.hold = 0; } else st.seg = { from: Math.round(st.t), to: Math.round(st.t) + 1, p: 0, dur: 2.6 }; } }
   } else if (st.target != null){
     const d = st.target - st.t, v = Math.min(Math.abs(d), Math.max(raw * .3, Math.abs(d) * (1 - Math.exp(-raw * 4))), raw * 2.4);
     st.t += Math.sign(d) * v; if (Math.abs(st.target - st.t) < .001){ st.t = st.target; st.target = null; }
