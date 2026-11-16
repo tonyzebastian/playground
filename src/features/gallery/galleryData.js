@@ -39,6 +39,12 @@ const galleryCatalog = [
     link: '/experiences/frost',
     backgroundColor: '#0d141c',
   }),
+  componentCard('sea', 'Sea', {
+    title: 'Evening Sea',
+    size: { width: 240, height: 300 },
+    link: '/experiences/sea',
+    backgroundColor: '#0a0e14',
+  }),
   componentCard('flock', 'Flock', {
     title: 'Flock in Flight',
     size: { width: 280, height: 200 },
