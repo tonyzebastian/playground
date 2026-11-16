@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { DialRoot, useDialKitController } from "dialkit";
 import AppHeader from "@/components/shared/AppHeader";
 import Meadow from "./Meadow";
-import { DEFAULT_LOGO, MEADOW_ASPECTS, MEADOW_CONFIG } from "./meadowConfig";
+import { DEFAULT_LOGO, MEADOW_ASPECTS, MEADOW_CONFIG, MEADOW_MOODS } from "./meadowConfig";
 import styles from "./MeadowStudio.module.css";
 
 export default function MeadowStudio() {
@@ -53,6 +53,15 @@ export default function MeadowStudio() {
   const dial = useDialKitController("Windy Meadow", MEADOW_CONFIG, { id: "meadow", onAction: handleAction });
   const values = dial.values;
   const aspect = MEADOW_ASPECTS[values.canvas.orientation] ?? MEADOW_ASPECTS.portrait;
+
+  // Picking a mood writes its light, air and grade values into the dials (which stay free to move afterwards).
+  const mood = values.mood.preset;
+  const moodRef = useRef(mood);
+  useEffect(() => {
+    if (moodRef.current === mood) return;
+    moodRef.current = mood;
+    if (MEADOW_MOODS[mood]) dial.setValues(MEADOW_MOODS[mood]);
+  }, [mood, dial]);
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -108,16 +117,17 @@ export default function MeadowStudio() {
             <section className={styles.caption} aria-labelledby="windy-meadow-title">
               <h1 id="windy-meadow-title">Windy Meadow, October 2026</h1>
               <p>
-                Long grass combed by travelling gusts, with small yellow flowers
-                and a stone logo resting in the field.
+                Long grass combed by travelling gusts in low evening light, with
+                small yellow flowers and a stone logo resting in the field.
               </p>
 
               <div className={styles.section}>
                 <h2>Dev notes.</h2>
                 <p>
                   Built with instanced WebGL grass blades, a wind field baked to a
-                  texture every frame, a logo turned into a height-field boulder,
-                  and a painterly Kuwahara finish. Press{" "}
+                  texture every frame, a sun shadow map, a logo turned into a
+                  height-field boulder with a scanned rock surface, and a filmic
+                  grade with bloom. Press{" "}
                   <span className={styles.keys}>
                     <kbd>Control</kbd> + <kbd>Option / Alt</kbd> + <kbd>Shift</kbd> + <kbd>M</kbd>
                   </span>{" "}

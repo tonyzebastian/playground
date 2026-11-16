@@ -9,7 +9,39 @@ export const MEADOW_ASPECTS = {
   landscape: 7 / 5,
 };
 
+// Moods: each one is a set of light, air and grade values written into the dials when it is picked.
+// "golden" is also what the defaults below describe.
+export const MEADOW_MOODS = {
+  golden: {
+    light: { sunAzimuth: -52, sunElevation: 15, sunColor: '#ffc88c', sunlight: 1.7, ambient: 1, skyColor: '#5b7399', backlight: 1.6, backlightColor: '#d6b23c', cloudShadow: 0.42 },
+    atmosphere: { haze: 0.38, hazeColor: '#b79a86', mist: 0.3, mistColor: '#e8c9a4', motes: 0.35 },
+    post: { exposure: 1.12, bloom: 0.5, saturation: 0.95, tone: 0.6, shadowTint: '#a9b9ff', highlightTint: '#ffdcae', vignette: 0.28 },
+  },
+  dusk: {
+    light: { sunAzimuth: -64, sunElevation: 7, sunColor: '#ff8f66', sunlight: 1.05, ambient: 1.4, skyColor: '#4a5f9c', backlight: 1.2, backlightColor: '#c98a4a', cloudShadow: 0.3 },
+    atmosphere: { haze: 0.5, hazeColor: '#6c7aa0', mist: 0.5, mistColor: '#aab4d6', motes: 0.25 },
+    post: { exposure: 1.08, bloom: 0.6, saturation: 0.85, tone: 0.85, shadowTint: '#8fa6ff', highlightTint: '#ffc9b0', vignette: 0.36 },
+  },
+  overcast: {
+    light: { sunAzimuth: -30, sunElevation: 55, sunColor: '#e9eef2', sunlight: 0.5, ambient: 1.35, skyColor: '#8794a0', backlight: 0.5, backlightColor: '#a9b86a', cloudShadow: 0.8 },
+    atmosphere: { haze: 0.55, hazeColor: '#aab4b8', mist: 0.6, mistColor: '#d5dbde', motes: 0.1 },
+    post: { exposure: 0.95, bloom: 0.25, saturation: 0.8, tone: 0.5, shadowTint: '#b4c4d8', highlightTint: '#eef2f0', vignette: 0.3 },
+  },
+};
+
 export const MEADOW_CONFIG = {
+  mood: {
+    _collapsed: false,
+    preset: {
+      type: 'select',
+      options: [
+        { value: 'golden', label: 'Golden hour' },
+        { value: 'dusk', label: 'Blue dusk' },
+        { value: 'overcast', label: 'Overcast highland' },
+      ],
+      default: 'golden',
+    },
+  },
   canvas: {
     _collapsed: true,
     orientation: {
@@ -39,6 +71,8 @@ export const MEADOW_CONFIG = {
     uploadLogo: { type: 'action', label: 'Upload logo…' },
     resetLogo: { type: 'action', label: 'Use default logo' },
     invertLogo: false,
+    scanAmount: [1, 0, 1, 0.01],        // the built-in scanned rock surface (Poly Haven "Mossy Rock", CC0)
+    scanScale: [0.2, 0.05, 1, 0.01],
     uploadTexture: { type: 'action', label: 'Upload stone texture…' },
     removeTexture: { type: 'action', label: 'Remove texture' },
     textureAmount: [1, 0, 1, 0.01],
@@ -48,24 +82,25 @@ export const MEADOW_CONFIG = {
     z: [-1, -16, 10, 0.1],
     rotation: [0, -180, 180, 1],
     scale: [15, 2, 24, 0.05],
-    lift: [-0.12, -1.5, 1.5, 0.01],
+    lift: [-0.3, -1.5, 1.5, 0.01],
     inflate: [0.03, -0.03, 0.08, 0.001],
     thickness: [0.24, 0.04, 0.7, 0.005],
-    roundness: [0.11, 0.01, 0.14, 0.002],
+    roundness: [0.06, 0.01, 0.14, 0.002],
+    blocks: [0.4, 0, 1, 0.01],          // how strongly the strokes break into separate fitted boulders
     jaggedness: [0.5, 0, 2.5, 0.05],
     grain: [7, 3, 30, 0.5],
     roughness: [1.3, 0, 2.5, 0.05],
     seed: [3, 0, 100, 1],
-    stone: '#a79f8f',
+    stone: '#c6beb0',
     detail: [1, 0, 2, 0.05],
-    lichen: [0.35, 0, 1, 0.01],
     shadow: [0.65, 0, 1, 0.01],
-    moss: [0.25, 0, 1, 0.01],
+    moss: [0.18, 0, 1, 0.01],
     mossColor: '#768a52',
-    brightness: [1.1, 0.3, 3, 0.01],
+    brightness: [1.12, 0.3, 3, 0.01],
     ambient: [1, 0, 3, 0.05],
-    grassKeep: [0.06, 0, 1, 0.01],
-    grassHeight: [0.25, 0.1, 1.5, 0.01],
+    grassKeep: [0.3, 0, 1, 0.01],       // share of blades that grow out of the joints and cracks (none grow through solid stone)
+    grassHeight: [0.4, 0.1, 1.5, 0.01],  // how tall those are, against the open meadow
+    grassSkirt: [0.45, 0, 1.5, 0.01],   // extra height of the uncut grass pressed against the stone
   },
   flowers: {
     _collapsed: false,
@@ -135,19 +170,21 @@ export const MEADOW_CONFIG = {
     segments: [7, 4, 12, 1],
     undergrowth: [1, 0, 2, 0.05],
     undergrowthHeight: [0.5, 0.2, 1, 0.01],
+    seedHeads: [1, 0, 3, 0.05],
     dryTufts: [0.06, 0, 0.6, 0.01],
     seed: [11, 1, 999, 1],
   },
   color: {
     _collapsed: true,
-    meadow: '#456e1c',
-    fresh: '#739629',
-    cool: '#335e2b',
-    straw: '#a8944d',
-    tip: '#b8c26b',
-    dryTip: '#857036',
+    meadow: '#4c6a26',
+    fresh: '#7a8e34',
+    cool: '#3a5c3a',
+    straw: '#b39a55',
+    tip: '#c9c06e',
+    dryTip: '#8a7238',
+    seedHead: '#d9b064',
     soil: '#0b160a',
-    saturation: [0.82, 0, 1.6, 0.01],
+    saturation: [0.8, 0, 1.6, 0.01],
     brightness: [1, 0.5, 1.6, 0.01],
     toneVariation: [1, 0, 2, 0.05],
     patchStrength: [1, 0, 2, 0.05],
@@ -157,15 +194,20 @@ export const MEADOW_CONFIG = {
   },
   light: {
     _collapsed: true,
-    sunAzimuth: [-35, -180, 180, 1],
-    sunElevation: [38, 5, 85, 1],
-    sunColor: '#fff0c7',
-    sunlight: [0.95, 0, 2, 0.01],
+    sunAzimuth: [-52, -180, 180, 1],
+    sunElevation: [15, 5, 85, 1],
+    sunColor: '#ffc88c',
+    sunlight: [1.7, 0, 3, 0.01],
     ambient: [1, 0, 2, 0.01],
-    skyColor: '#4d6685',
-    backlight: [1, 0, 3, 0.05],
-    backlightColor: '#8cc72e',
-    sheen: [0.03, 0, 0.5, 0.01],
+    skyColor: '#5b7399',
+    backlight: [1.6, 0, 3, 0.05],
+    backlightColor: '#d6b23c',
+    shadows: true,
+    cloudShadow: [0.42, 0, 1, 0.01],
+    cloudSize: [1, 0.3, 3, 0.05],
+    cloudSpeed: [1, 0, 3, 0.05],
+    sheen: [0.05, 0, 0.5, 0.01],
+    gustSheen: [0.45, 0, 2, 0.01],
     canopyShadow: [1, 0, 1.5, 0.01],
     rootShade: [1, 0, 1.5, 0.01],
     crease: [0.55, 0, 1, 0.01],
@@ -174,17 +216,27 @@ export const MEADOW_CONFIG = {
   atmosphere: {
     _collapsed: true,
     haze: [0.38, 0, 1, 0.01],
-    hazeColor: '#8cb899',
+    hazeColor: '#b79a86',
+    mist: [0.3, 0, 1, 0.01],
+    mistColor: '#e8c9a4',
+    mistHeight: [1.1, 0.3, 4, 0.05],
+    motes: [0.35, 0, 1, 0.01],
     thinStart: [30, 5, 80, 1],
     thinEnd: [65, 15, 140, 1],
     thinKeep: [0.35, 0.05, 1, 0.01],
   },
   post: {
     _collapsed: true,
-    exposure: [1, 0.5, 1.6, 0.01],
+    exposure: [1.12, 0.5, 1.6, 0.01],
     contrast: [0.35, 0, 1, 0.01],
-    vignette: [0.16, 0, 0.6, 0.01],
-    grain: [0.035, 0, 0.15, 0.005],
+    bloom: [0.5, 0, 1.5, 0.01],
+    bloomThreshold: [0.8, 0.3, 1.5, 0.01],
+    saturation: [0.95, 0, 1.6, 0.01],
+    tone: [0.6, 0, 1, 0.01],            // split-toning strength: shadows lean to one tint, highlights to the other
+    shadowTint: '#a9b9ff',
+    highlightTint: '#ffdcae',
+    vignette: [0.28, 0, 0.6, 0.01],
+    grain: [0.04, 0, 0.15, 0.005],
   },
   paint: {
     _collapsed: true,
@@ -204,7 +256,7 @@ export function bakedKey(values) {
   const { camera: c, growth: g, canvas, flowers: f } = values;
   return [
     c.height, c.distance, c.lookAhead, c.fov,
-    g.density, g.tuftSize, g.bladesPerTuft, g.segments, g.undergrowth, g.undergrowthHeight, g.dryTufts, g.seed,
+    g.density, g.tuftSize, g.bladesPerTuft, g.segments, g.undergrowth, g.undergrowthHeight, g.dryTufts, g.seed, g.seedHeads,
     canvas.orientation,
     f.density, f.clusterSize, f.spread,
   ].join('|');
